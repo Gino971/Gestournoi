@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Scores Tarot</title>
+  <!-- PWA : plein écran sans barres Android / onglets navigateur -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1f2933">
+  <link rel="apple-touch-icon" href="build/Excuse.png">
+  <link rel="stylesheet" href="style.css?v=10" />
+</head>
+<body>
+  <header>
+    <nav>
+      <button type="button" data-screen="joueurs" class="btn-nav-action" title="Joueurs / Tirage">👥</button>
+      <button type="button" data-screen="feuille" class="btn-nav-action" title="Saisie scores">✍️</button>
+      <button type="button" data-screen="plan" title="Plan de table">🗺️</button>
+      <button type="button" data-screen="soiree" title="Scores Tournoi">🏆</button>
+      <button type="button" data-screen="classement" title="Classement annuel">📊</button>
+      <button type="button" data-screen="cognin" title="Classement Cognin">🏅</button>
+      <button type="button" data-screen="recap" title="Récapitulatif">📋</button>
+      <button type="button" data-screen="timer" title="Minuteur">⏱️</button>
+      <button type="button" data-screen="aide" title="Aide">❓</button>
+      
+      <div class="nav-right-container">
+        <button type="button" id="btn-sauvegarde" title="Sauvegarde">💾</button>
+        <button type="button" id="btn-restauration" title="Restauration">📂</button>
+        <button type="button" id="btn-quitter" title="Plein écran">🔲</button>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Input global pour le chargement de fichier, sorti des sections cachées -->
+    <input type="file" id="input-backup-file" accept=".json" class="hidden" aria-label="Fichier de sauvegarde" />
+
+    <div id="confirmation-overlay" class="hidden">
+      <div class="thumb-up">👍</div>
+    </div>
+
+    <!-- Modal custom (remplace alert/confirm/choice natifs sur tablette) -->
+    <div id="custom-dialog-overlay" class="custom-dialog-overlay hidden" role="dialog" aria-modal="true">
+      <div class="custom-dialog-card">
+        <div id="custom-dialog-message" class="custom-dialog-message"></div>
+        <div id="custom-dialog-buttons" class="custom-dialog-buttons"></div>
+      </div>
+    </div>
+
+    <!-- Joueurs / tirage -->
+    <section id="screen-joueurs" class="screen">
+      <div class="screen-header">
+        <div class="screen-title"><h2>Joueurs du tournoi</h2></div>
+        <div class="screen-actions actions">
+          <!-- Redistribution small banner (inserted into the H2 by JS) appears left; place nb-parties to the right -->
+          <label class="label-nomargin input-manches-wrapper header-nb-parties">
+             Nombre de manches
+             <div class="nb-parties-control">
+               <input id="nb-parties" type="number" min="1" max="7" value="4" readonly aria-readonly="true" aria-label="Nombre de manches (lecture seule)" tabindex="-1" onfocus="this.blur()" />
+               <div class="nb-parties-buttons" role="group" aria-label="Contrôle nombre de manches">
+                 <button type="button" id="btn-incr-manche" class="btn-small" title="Ajouter une manche" aria-label="Ajouter une manche">
+                   <svg width="8" height="8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                     <path d="M6 15l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                   </svg>
+                 </button>
+                 <button type="button" id="btn-decr-manche" class="btn-small" title="Retirer une manche" aria-label="Retirer une manche">
+                   <svg width="8" height="8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                     <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                   </svg>
+                 </button>
+               </div>
+             </div>
+          </label>
+          <label class="label-nomargin input-manches-wrapper header-nb-parties">
+             Parties / manche
+             <div class="nb-parties-control">
+               <input id="nb-parties-par-manche" type="number" min="1" max="10" value="5" readonly aria-readonly="true" aria-label="Nombre de parties par manche (lecture seule)" tabindex="-1" onfocus="this.blur()" />
+               <div class="nb-parties-buttons" role="group" aria-label="Contrôle nombre de parties par manche">
+                 <button type="button" id="btn-incr-parties" class="btn-small" title="Ajouter une partie" aria-label="Ajouter une partie">
+                   <svg width="8" height="8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                     <path d="M6 15l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                   </svg>
+                 </button>
+                 <button type="button" id="btn-decr-parties" class="btn-small" title="Retirer une partie" aria-label="Retirer une partie">
+                   <svg width="8" height="8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                     <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                   </svg>
+                 </button>
+               </div>
+             </div>
+          </label>
+        </div>
+      </div>
+     
+      <div class="joueurs-wrapper">
+        <div class="col-liste-generale">
+          <div class="flex-row align-center gap-05 mb-2">
+            <h3 class="h3-nomargin">Liste générale</h3>
+
+            <div class="liste-generale-controls">
+              <form autocomplete="off" id="form-ajout-joueur" class="form-add-joueur header-add-form">
+                <div class="input-with-add">
+                  <input
+                    type="text"
+                    id="saisie-joueur-express"
+                    name="search_field_random_x99"
+                    placeholder="Nom du joueur"
+                    autocomplete="off"
+                    enterkeyhint="done"
+                    spellcheck="false"
+                    class="input-search-joueur"
+                  />
+                  <button type="submit" id="btn-ajouter-joueur-club" class="btn-secondary btn-add-joueur header-add-btn" aria-label="Ajouter un joueur">Ajouter</button>
+                </div>
+              </form>
+
+              <button type="button" id="btn-vider-liste-generale" class="btn-delete-action btn-icon" aria-label="Vider la liste générale">🗑︎</button>
+            </div>
+          </div>
+
+          <div id="liste-joueurs"></div>
+
+          <!-- controls moved to header (liste-generale-controls) -->
+        </div>
+
+        <div class="col-liste-tournoi">
+          <div class="tournoi-header">
+             <div class="tournoi-header-center">
+               <h3 class="h3-nomargin">Joueurs du tournoi</h3>
+               <button type="button" id="btn-manual-composition-joueurs" class="btn-secondary header-compose-btn" title="Composer la première manche">Composer 1ère manche</button>
+             </div>
+             <button type="button" id="btn-clear-joueurs-tournoi" class="btn-delete-action btn-icon" aria-label="Vider la liste tournoi">🗑︎</button>
+          </div>
+          
+          <div id="liste-joueurs-tournoi"></div>
+
+          <div class="actions">
+            <label class="label-nomargin" title="Si activé, la dernière manche sera assignée en serpentin après la 2ème à dernière manche">
+              <input type="checkbox" id="cb-serpentin" /> Serpentin
+            </label>
+            <label title="Saisie manuelle (forcer la saisie manuelle pour ce tournoi)">
+              <input type="checkbox" id="cb-manual-entry" /> Saisie manuelle
+            </label>
+            <button type="button" id="btn-tirage" class="btn-secondary">
+              Tirage au sort
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Plan de table -->
+    <section id="screen-plan" class="screen hidden">
+      <div class="plan-header-actions">
+        <h2 id="plan-heading">Plan de table / Manches</h2>
+        <div class="actions">
+          <!-- manual composition removed from Plan (uses Plan modal via Joueurs/Tirage quick-access only) -->
+        </div>
+      </div>
+
+      <div id="rotations-result" class="rotations-container"></div>
+
+      <!-- Modal overlay pour composition manuelle de la 1ère manche (placée dans Plan) -->
+      <div id="composition-overlay" class="hidden modal-overlay" role="dialog" aria-modal="true" aria-label="Composer première manche" tabindex="-1">
+        <div class="modal-card">
+          <h3>Composer la première manche</h3>
+          <p>Cliquez sur les joueurs pour les placer dans l'ordre des sièges (N, S, E, O ...).</p>
+          <div class="composition-grid">
+            <div class="composition-available">
+              <h4>Joueurs disponibles</h4>
+              <div id="comp-available-list" class="comp-list"></div>
+            </div>
+            <div class="composition-arranged">
+              <h4>Ordre des sièges (1..)</h4>
+              <div id="comp-arranged-list" class="comp-list"></div>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" id="comp-validate" class="btn-primary">Valider composition</button>
+            <button type="button" id="comp-cancel" class="btn-secondary">Annuler</button>
+            <div class="spacer"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Feuille de table -->
+    <section id="screen-feuille" class="screen hidden">
+      <h2>Saisie scores</h2>
+      <p>Saisissez uniquement le score des preneurs. L'application calcule le reste automatiquement.</p>
+
+      <div class="actions">
+        <select id="select-rotation" title="Sélection de la manche" aria-label="Sélection de la manche"></select>
+        <div class="spacer"></div>
+        <!-- Mode unique: Saisie (tables) -->
+      </div>
+
+      <!-- Container principal de saisie (anciennement "Saisie Rapide") -->
+      <div id="container-saisie"></div>
+    </section>
+
+    <!-- Feuille de soirée -->
+    <section id="screen-soiree" class="screen hidden">
+      <div class="screen-header">
+        <div class="screen-title">
+          <h2>Scores Tournoi</h2>
+          <button type="button" id="btn-effacer-soiree" class="btn-delete-action btn-icon" aria-label="Effacer scores">🗑︎</button>
+        </div>
+
+        <div class="screen-center">
+          <button type="button" id="btn-lucky-draw" class="btn-secondary" title="Tirage d'un 'malchanceux-chanceux'">
+            🎲 Tirage chanceux
+          </button>
+        </div>
+
+        <div class="actions">
+          <div class="spacer"></div>
+          <label>
+            Date
+            <input id="date-tournoi" type="date" />
+          </label>
+          <button type="button" id="btn-fin-tournoi" class="btn-primary">
+            Fin de tournoi
+          </button>
+        </div>
+      </div>
+
+      <div id="manual-entry-note" class="actions hidden" aria-live="polite"></div>
+
+      <div class="soiree-scroll-wrapper">
+        <table id="table-soiree">
+          <thead id="thead-soiree"></thead>
+          <tbody id="tbody-soiree"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Classement annuel, en 2 tableaux -->
+    <section id="screen-classement" class="screen hidden">
+      <div class="screen-header">
+        <div class="screen-title">
+          <h2>Classement annuel</h2>
+          <button type="button" id="btn-effacer-classement" class="btn-delete-action btn-icon" aria-label="Effacer tout">🗑︎</button>
+        </div>
+        <div class="actions">
+          <div class="spacer"></div>
+          <button type="button" id="btn-export-pdf-classement" class="btn-primary">
+            Exporter en PDF
+          </button>
+        </div>
+      </div>
+
+      <div class="table-scroll-container">
+        <div class="classement-layout">
+          <!-- Bloc gauche : Rang / Joueur / Total / Prime -->
+          <table id="table-classement-fixe">
+            <thead>
+              <tr>
+                <th>Rang</th>
+                <th>Joueur</th>
+                <th>Total</th>
+                <th>Prime</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+
+          <!-- Bloc droit : scores par date (scrollable) -->
+          <div class="classement-scroll-wrapper">
+             <table id="table-classement-dates">
+               <thead></thead>
+               <tbody></tbody>
+             </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scores Cognin -->
+    <section id="screen-cognin" class="screen hidden">
+      <div class="screen-header">
+        <div class="screen-title">
+          <h2>Classement annuel Cognin</h2>
+          <button type="button" id="btn-effacer-cognin" class="btn-delete-action btn-icon" aria-label="Effacer tout">🗑︎</button>
+        </div>
+        <div class="actions">
+          <div class="spacer"></div>
+          <button type="button" id="btn-export-pdf-cognin" class="btn-primary">
+            Exporter en PDF
+          </button>
+        </div>
+      </div>
+
+      <div class="table-scroll-container">
+        <div class="classement-layout">
+          <!-- Bloc gauche : Rang / Joueur / Total -->
+          <table id="table-cognin-fixe">
+            <thead>
+              <tr>
+                <th>Rang</th>
+                <th>Joueur</th>
+                <th>Total Pts</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+
+          <!-- Bloc droit : scores par date -->
+          <div class="classement-scroll-wrapper">
+             <table id="table-cognin-dates">
+               <thead></thead>
+               <tbody></tbody>
+             </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Récap -->
+    <section id="screen-recap" class="screen hidden">
+      <h2>Récapitulatif</h2>
+      <div class="recap-scroll-wrapper">
+        <table id="table-recap">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div id="detail-recap"></div>
+      </div>
+    </section>
+
+
+    
+    <!-- Modal Sélection Sauvegarde -->
+    <div id="modal-backup" class="hidden">
+      <div class="modal-content-backup">
+        <h3>Choisir une sauvegarde à restaurer</h3>
+        <ul id="list-backups-container"></ul>
+        <button type="button" id="btn-close-modal-backup" class="btn-secondary">Annuler</button>
+      </div>
+    </div>
+
+    <!-- Minuteur -->
+    <section id="screen-timer" class="screen hidden">
+      <div class="timer-container">
+        <div class="timer-display">00:00</div>
+        <div class="timer-controls">
+          <div class="timer-input-row">
+            <label for="timer-minutes">Minutes :</label>
+            <input type="number" id="timer-minutes" min="1" max="999" placeholder="ex: 50" />
+            <button type="button" id="timer-start" class="btn-primary">▶ Démarrer</button>
+            <button type="button" id="timer-stop" class="btn-secondary">⏸ Stop</button>
+            <button type="button" id="timer-reset" class="btn-secondary">↺ Reset</button>
+          </div>
+          <div class="timer-quick-row">
+            <span>Raccourcis :</span>
+            <button type="button" id="timer-45" class="btn-quick">45 min</button>
+            <button type="button" id="timer-50" class="btn-quick">50 min</button>
+            <button type="button" id="timer-55" class="btn-quick">55 min</button>
+            <button type="button" id="timer-60" class="btn-quick">60 min</button>
+          </div>
+          <div class="timer-quick-below">
+            <label for="timer-quick-seconds">Secondes :</label>
+            <input type="number" id="timer-quick-seconds" min="1" max="9999" placeholder="secondes" />
+            <button type="button" id="timer-quick-start" class="btn-primary">Go</button>
+          </div>
+          <div class="timer-sound-toggle">
+            <label><input type="checkbox" id="timer-sound-cb" checked /> 🔔 Sonnerie à la fin</label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-aide" class="screen hidden">
+      <div class="aide-container">
+        <h2>❓ Aide — Gestion Tournoi de Tarot</h2>
+
+        <div class="aide-section">
+          <h3>🖥 Installation</h3>
+          <ul>
+            <li><strong>Mac</strong> : ouvrez le fichier <code>.dmg</code>, glissez l'app dans Applications. Au 1er lancement : clic-droit → Ouvrir → Confirmer.</li>
+            <li><strong>Windows</strong> : double-cliquez le fichier <code>.exe</code> pour installer.</li>
+          </ul>
+        </div>
+
+        <div class="aide-section">
+          <h3>👤 Gestion des joueurs</h3>
+          <ul>
+            <li><strong>Ajouter</strong> un joueur : tapez le nom et cliquez <em>Ajouter</em>.</li>
+            <li><strong>Cocher/décocher</strong> pour inclure ou exclure un joueur du tournoi.</li>
+            <li>Le nombre de joueurs n'a pas besoin d'être un multiple exact de 4 ou 5. Trois options sont proposées selon le nombre de joueurs :
+              <ul>
+                <li><strong>Ajouter des morts</strong> (1 à 3) — des places vides complètent les tables.</li>
+                <li><strong>Tables de 5</strong> — créer de 1 à 3 tables de 5 joueurs au lieu de 4.</li>
+                <li><strong>Exclure un joueur</strong> — un joueur est exclu par rotation à chaque manche et marque automatiquement <strong>180 points</strong>.</li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+
+        <div class="aide-section">
+          <h3>🔄 Tirage au sort</h3>
+          <p>Le tirage mélange aléatoirement les joueurs et génère les rotations pour toutes les manches. <strong>Attention :</strong> un nouveau tirage remet les scores à zéro.</p>
+        </div>
+
+        <div class="aide-section">
+          <h3>📊 Saisie des scores</h3>
+          <ul>
+            <li>Sélectionnez la <strong>manche</strong> dans le menu déroulant.</li>
+            <li>Pour chaque table, saisissez uniquement le <strong>score de l'attaquant</strong> — l'application calcule automatiquement les scores des défenseurs.</li>
+            <li>Cliquez <strong>Valider</strong> pour enregistrer les scores de la manche.</li>
+            <li>Les scores sont sauvegardés automatiquement au fur et à mesure.</li>
+          </ul>
+        </div>
+
+        <div class="aide-section">
+          <h3>🎯 Déroulement d'un tournoi</h3>
+          <ol>
+            <li><strong>Joueurs / Tirage</strong> — Sélectionnez les joueurs présents, réglez le nombre de manches et de parties par manche, puis lancez le <em>Tirage au sort</em>.</li>
+            <li><strong>Plan de table</strong> — Consultez la répartition des joueurs aux tables pour chaque manche.</li>
+            <li><strong>Saisie scores</strong> — Saisissez uniquement le score des preneurs. L'application calcule le reste automatiquement.</li>
+            <li><strong>Scores Tournoi</strong> — Visualisez le classement en direct avec les totaux.</li>
+            <li><strong>Classement annuel</strong> — Classement cumulé sur l'année.</li>
+            <li><strong>Récapitulatif</strong> — Vue d'ensemble de la soirée (exportable en PDF).</li>
+          </ol>
+          <h4>⏱ Minuteur</h4>
+          <p>Lancez un compte à rebours pour chaque manche. Des raccourcis rapides (45, 50, 55, 60 min) sont disponibles. Quand le temps est écoulé, le bouton Minuteur clignote en rouge dans la barre de navigation.</p>
+        </div>
+
+        <div class="aide-section">
+          <h3>💾 Sauvegarde / Restauration</h3>
+          <ul>
+            <li><strong>Sauvegarde</strong> : exporte toutes les données (joueurs, scores, classement) dans un fichier JSON.</li>
+            <li><strong>Restauration</strong> : importe un fichier de sauvegarde précédemment créé.</li>
+          </ul>
+          <p>Les données sont aussi sauvegardées automatiquement en local sur votre ordinateur.</p>
+        </div>
+
+        <div class="aide-section aide-footer">
+          <p>💡 <strong>Astuce :</strong> Les données sont stockées localement. Pour repartir à zéro, supprimez le dossier de données :</p>
+          <ul>
+            <li>Mac : <code>~/Library/Application Support/gestion-tournoi-tarot/data/</code></li>
+            <li>Windows : <code>%APPDATA%/gestion-tournoi-tarot/data/</code></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Zone cachée utilisée uniquement pour la génération du PDF (split colonnes) -->
+    <div id="print-container"></div>
+    <!-- Theme panel removed: theming is now static via CSS variables in style.css -->
+  </main>
+
+  <script src="lib/jspdf.umd.min.js"></script>
+  <script src="lib/jspdf.plugin.autotable.min.js"></script>
+  <script type="module" src="app.js?v=16"></script>
+</body>
+</html>
