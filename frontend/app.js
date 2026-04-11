@@ -4786,8 +4786,14 @@ async function renderFeuilleSoiree () {
             tr.classList.add('is-mort')
             Array.from(tr.querySelectorAll('.manual-manche-input')).forEach(inp => {
               inp.disabled = true
+              inp.setAttribute('aria-disabled', 'true')
+              inp.title = 'Champ désactivé pour un joueur Mort'
               inp.classList.add('input-mort-disabled')
             })
+            try {
+              const nameCell = tr.querySelector('.col-joueur')
+              if (nameCell) nameCell.title = 'Joueur Mort — pas de saisie pour cette manche'
+            } catch (_e) {}
           }
         } catch (_e) {}
       })
