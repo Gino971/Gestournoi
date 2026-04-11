@@ -2036,10 +2036,10 @@ async function updateRotationsDisplay () {
           const eNom = (e?.nom || '').trim()
           const oNom = (o?.nom || '').trim()
           const excluTrim = (excluPourManche || '').trim()
-          const isMort = excluTrim && exclus.includes(excluTrim)
+          const isMort = excluTrim && String(excluTrim).toUpperCase().includes('MORT')
           const excluLabel = isMort ? 'Mort' : 'Exclu'
 
-          const highlightClass = tableIdx === 0 ? ' table-highlight' : ''
+          const highlightClass = ''
 
           return `
             <div class="table-card${highlightClass}">
@@ -2066,10 +2066,14 @@ async function updateRotationsDisplay () {
       // En serpentin, la dernière manche n'a pas d'exclu
       const totalNbManches = Number(nbPartiesInput && nbPartiesInput.value || 0)
       const isLastSerpentinManche = getSerpentinEnabled() && totalNbManches >= 2 && mancheIndex === totalNbManches - 1
-      const isMort = excluPourManche && exclus.includes(excluPourManche)
-      const label = isMort ? 'Mort' : 'Exclu'
+      const isMort = excluPourManche && String(excluPourManche).toUpperCase().includes('MORT')
+      // Seat label: preserve 'Mort' for Mort placeholders, otherwise 'Exclu'
+      const seatLabel = isMort ? 'Mort' : 'Exclu'
+      // Header label: if it's a real Mort placeholder keep 'Mort', otherwise
+      // use a more explicit phrase for clarity next to the manche number.
+      const headerLabel = isMort ? 'Mort' : 'Exclu pour cette manche'
       const headerHtml = (excluPourManche && !isLastSerpentinManche)
-        ? `<h3>Manche ${mancheIndex + 1} <span class="rotation-exclu-inline">${label}: <strong>${excluPourManche}</strong></span></h3>`
+        ? `<h3>Manche ${mancheIndex + 1} <span class="rotation-exclu-inline">${headerLabel}: <strong>${excluPourManche}</strong></span></h3>`
         : `<h3>Manche ${mancheIndex + 1}</h3>`
 
       return `
@@ -2257,10 +2261,18 @@ const btnManualComposition = document.getElementById('btn-manual-composition')
 const compValidateBtn = document.getElementById('comp-validate')
 const compCancelBtn = document.getElementById('comp-cancel')
 
-function openCompositionModal () {
+async function openCompositionModal () {
   if (!compOverlay) return
   // Build available list — include any `Mort` placeholders so they can be placed
-  const avail = (listeTournoi || []).filter(n => n && String(n).trim() !== '')
+  // but in mode 'exclu' remove the excluded player(s) from the available set
+  let avail = (listeTournoi || []).filter(n => n && String(n).trim() !== '')
+  try {
+    if (typeof getMode === 'function' && getMode() === 'exclu') {
+      const exclusArr = (await getExclusTournoi()) || []
+      const exclSet = new Set((exclusArr || []).filter(Boolean))
+      avail = avail.filter(n => !exclSet.has(n))
+    }
+  } catch (_e) { /* ignore */ }
   compAvailableList.innerHTML = avail.map((n) => {
     const isMort = String(n).toUpperCase().startsWith('MORT')
     const cls = isMort ? 'comp-item mort' : 'comp-item'
@@ -2295,13 +2307,42 @@ let compositionPreviewBackup = null
 async function syncCompositionToPlan () {
   try {
     const arranged = Array.from(compArrangedList.querySelectorAll('.comp-item')).map(el => decodeURIComponent(el.dataset.nom || ''))
-    // fill remaining players (preserve order of listeTournoi excluding MORT and already arranged)
-    // Include Mort placeholders from `listeTournoi` in the remaining order so
-    // the preview/rotation calculation accounts for padding players.
-    const remaining = (listeTournoi || []).filter(n => n && !arranged.includes(n))
+    // fill remaining players (preserve order of listeTournoi excluding already arranged)
+    // Exclude the current exclu when in 'exclu' mode so they are not placed.
+    let remaining = (listeTournoi || []).filter(n => n && !arranged.includes(n))
+    try {
+      if (typeof getMode === 'function' && getMode() === 'exclu') {
+        const exclusArr = (await getExclusTournoi()) || []
+        const exclSet = new Set((exclusArr || []).filter(Boolean))
+        remaining = remaining.filter(n => !exclSet.has(n))
+      }
+    } catch (_e) { /* ignore */ }
     const fullOrder = [...arranged, ...remaining]
 
-    const previewFullTirage = fullOrder.map((nm, idx) => ({ nom: nm, numero: idx + 1 }))
+    // Reinsert excluded players into the preview ordering so the Plan and
+    // Saisie UIs still display exclusion labels. We preserve the original
+    // `listeTournoi` ordering for excluded player positions when available.
+    const exclusArr = await getExclusTournoi().catch(() => [])
+    const exclSet = new Set((exclusArr || []).filter(Boolean))
+    const baseOrder = (Array.isArray(dernierFullTirage) && dernierFullTirage.length)
+      ? dernierFullTirage.map(p => p.nom)
+      : (listeTournoi || [])
+
+    const previewFullTirage = []
+    let ptr = 0
+    for (let i = 0; i < baseOrder.length; i++) {
+      const name = baseOrder[i]
+      if (exclSet.has(name)) {
+        previewFullTirage.push({ nom: name, numero: previewFullTirage.length + 1 })
+      } else {
+        const nm = fullOrder[ptr++] || name
+        previewFullTirage.push({ nom: nm, numero: previewFullTirage.length + 1 })
+      }
+    }
+    // Append any leftover composed names (defensive)
+    while (ptr < fullOrder.length) {
+      previewFullTirage.push({ nom: fullOrder[ptr++], numero: previewFullTirage.length + 1 })
+    }
 
     // backup current rotations only once when starting preview
     if (!compositionPreviewBackup) {
@@ -2465,9 +2506,39 @@ if (compValidateBtn) compValidateBtn.addEventListener('click', async () => {
   }
 
   // complete the ordering with remaining players (preserve listeTournoi order)
-  const remaining = (listeTournoi || []).filter(n => n && !String(n).toUpperCase().startsWith('MORT') && !arranged.includes(n))
+  let remaining = (listeTournoi || []).filter(n => n && !String(n).toUpperCase().startsWith('MORT') && !arranged.includes(n))
+  try {
+    if (typeof getMode === 'function' && getMode() === 'exclu') {
+      const exclusArr = (await getExclusTournoi()) || []
+      const exclSet = new Set((exclusArr || []).filter(Boolean))
+      remaining = remaining.filter(n => !exclSet.has(n))
+    }
+  } catch (_e) { /* ignore */ }
   const fullOrder = [...arranged, ...remaining]
-  const full = fullOrder.map((nm, idx) => ({ nom: nm, numero: idx + 1 }))
+
+  // Reinsert excluded players into the final ordering so they remain present
+  // in `listeTournoi` (and are labeled in the Plan / Saisie). Preserve
+  // relative positions from the previous `listeTournoi` when possible.
+  const exclusArr = await getExclusTournoi().catch(() => [])
+  const exclSet = new Set((exclusArr || []).filter(Boolean))
+  const baseOrder = (Array.isArray(dernierFullTirage) && dernierFullTirage.length)
+    ? dernierFullTirage.map(p => p.nom)
+    : (listeTournoi || [])
+
+  const finalOrder = []
+  let ptr = 0
+  for (let i = 0; i < baseOrder.length; i++) {
+    const name = baseOrder[i]
+    if (exclSet.has(name)) {
+      finalOrder.push(name)
+    } else {
+      finalOrder.push(fullOrder[ptr++] || name)
+    }
+  }
+  // Append leftovers defensively
+  while (ptr < fullOrder.length) finalOrder.push(fullOrder[ptr++])
+
+  const full = finalOrder.map((nm, idx) => ({ nom: nm, numero: idx + 1 }))
 
   // Persist and apply as the canonical full tirage
   dernierFullTirage = full
