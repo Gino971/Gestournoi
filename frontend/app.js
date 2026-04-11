@@ -2045,16 +2045,16 @@ async function updateRotationsDisplay () {
             <div class="table-card${highlightClass}">
               <div class="table-card-center-label">Table ${t.table}</div>
               <div class="table-seat table-seat-north">
-                <span>${nNom === excluTrim ? `<span style="color:#aaa;font-style:italic;">${excluLabel}</span>` : (nNom || '?')}</span>
+                <span>${nNom === excluTrim ? (isMort ? `<span class="seat-mort">${excluLabel}</span>` : `<span class="exclu-inline">${excluLabel}</span>`) : (nNom || '?')}</span>
               </div>
               <div class="table-seat table-seat-south">
-                <span>${sNom === excluTrim ? `<span style="color:#aaa;font-style:italic;">${excluLabel}</span>` : (sNom || '?')}</span>
+                <span>${sNom === excluTrim ? (isMort ? `<span class="seat-mort">${excluLabel}</span>` : `<span class="exclu-inline">${excluLabel}</span>`) : (sNom || '?')}</span>
               </div>
               <div class="table-seat table-seat-east">
-                <span>${eNom === excluTrim ? `<span style="color:#aaa;font-style:italic;">${excluLabel}</span>` : (eNom || '?')}</span>
+                <span>${eNom === excluTrim ? (isMort ? `<span class="seat-mort">${excluLabel}</span>` : `<span class="exclu-inline">${excluLabel}</span>`) : (eNom || '?')}</span>
               </div>
               <div class="table-seat table-seat-west">
-                <span>${oNom === excluTrim ? `<span style="color:#aaa;font-style:italic;">${excluLabel}</span>` : (oNom || '?')}</span>
+                <span>${oNom === excluTrim ? (isMort ? `<span class="seat-mort">${excluLabel}</span>` : `<span class="exclu-inline">${excluLabel}</span>`) : (oNom || '?')}</span>
               </div>
               ${exemptHtml}
             </div>

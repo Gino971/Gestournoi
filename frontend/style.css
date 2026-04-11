@@ -977,6 +977,10 @@ th, td {
   color: var(--center-label-color, #04b636);
 }
 
+/* Seat label styles for Exclu / Mort */
+.seat-mort { color: #FFD700; font-weight:700; }
+.exclu-inline { color: #aaa; font-style: italic; }
+
 /* Sièges */
 .table-seat {
   position: absolute;
