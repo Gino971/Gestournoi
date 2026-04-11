@@ -304,11 +304,17 @@ async def serve_frontend(full_path: str):
     # Essayer de servir le fichier demandé
     file_path = FRONTEND_DIR / full_path
     if file_path.is_file() and FRONTEND_DIR in file_path.resolve().parents:
-        return FileResponse(file_path)
+        # Serve file with no-cache headers to avoid stale client caches during development
+        return FileResponse(file_path, headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        })
 
     # Par défaut : Index.html (SPA fallback)
     index_path = FRONTEND_DIR / "index.html"
     if index_path.exists():
-        return FileResponse(index_path)
+        # Index (SPA) should not be cached during active development
+        return FileResponse(index_path, headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        })
 
     return {"error": "Frontend not found"}
