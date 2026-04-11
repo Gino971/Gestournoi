@@ -347,6 +347,15 @@ button {
   box-sizing: border-box;
 }
 
+/* Inputs for 'Mort' seats: distinct background to make them obvious */
+#container-saisie table input.saisie-input.mort-input,
+.saisie-card td.input-cell > input.mort-input {
+  background: #282727; /* bright yellow */
+  color: #000; /* dark text for contrast */
+  font-weight: 700;
+  border: 1px solid rgba(0,0,0,0.12);
+}
+
 .btn-delete-action:hover {
   background: rgba(255, 82, 82, 0.15);
   color: #ff8a80;
