@@ -4777,6 +4777,22 @@ async function renderFeuilleSoiree () {
     tbodySoiree.innerHTML = ''
     tbodySoiree.insertAdjacentHTML('beforeend', rowsHtml)
 
+    // Mark 'Mort' rows: color name and disable/strike inputs so user cannot enter scores
+    try {
+      Array.from(tbodySoiree.querySelectorAll('tr')).forEach(tr => {
+        try {
+          const name = String(decodeURIComponent(tr.dataset.nom || '') || '').trim()
+          if (name && name.toUpperCase().includes('MORT')) {
+            tr.classList.add('is-mort')
+            Array.from(tr.querySelectorAll('.manual-manche-input')).forEach(inp => {
+              inp.disabled = true
+              inp.classList.add('input-mort-disabled')
+            })
+          }
+        } catch (_e) {}
+      })
+    } catch (_e) {}
+
     // After initial render, set positional ranks (1..N)
     try { applyPositionalRanks() } catch (e) { console.warn('applyPositionalRanks failed', e) }
 
