@@ -12,6 +12,20 @@
   <meta name="theme-color" content="#1f2933">
   <link rel="apple-touch-icon" href="build/Excuse.png">
   <link rel="stylesheet" href="style.css?v=11" />
+  <!-- Inline critical styles to force 'Mort' visuals while debugging cache issues -->
+  <style>
+    tr.is-mort .col-joueur { color: #FFD700 !important; font-weight:700 !important; }
+    tr.is-mort input.manual-manche-input.input-mort-disabled {
+      text-decoration: line-through !important;
+      text-decoration-thickness: 2px !important;
+      text-decoration-color: #e11d48 !important;
+      color: #9a1f2d !important;
+      border-color: rgba(225,29,72,0.3) !important;
+      background-color: rgba(255,255,255,0.02) !important;
+      cursor: not-allowed !important;
+      opacity: 0.95 !important;
+    }
+  </style>
 </head>
 <body>
   <header>
