@@ -2021,7 +2021,7 @@ async function updateRotationsDisplay () {
       let excluPourManche = exclus[mancheIndex] || null
 
       const blocTables = tables
-        .map((t) => {
+        .map((t, tableIdx) => {
           const [n, s, e, o, x, y] = t.joueurs
           let exemptHtml = ''
           if (x) {
@@ -2039,8 +2039,10 @@ async function updateRotationsDisplay () {
           const isMort = excluTrim && exclus.includes(excluTrim)
           const excluLabel = isMort ? 'Mort' : 'Exclu'
 
+          const highlightClass = tableIdx === 0 ? ' table-highlight' : ''
+
           return `
-            <div class="table-card">
+            <div class="table-card${highlightClass}">
               <div class="table-card-center-label">Table ${t.table}</div>
               <div class="table-seat table-seat-north">
                 <span>${nNom === excluTrim ? `<span style="color:#aaa;font-style:italic;">${excluLabel}</span>` : (nNom || '?')}</span>
@@ -3148,7 +3150,23 @@ async function performGlobalValidateManche () {
       if (getMode && getMode() === 'exclu') {
         try { await ensureExcluHasScoreForManche(currentIdx) } catch (_e) { /* ignore */ }
         const exclusArr = (await getExclusTournoi()) || []
-        const newExclus = computeNextExclu(afterScores || [], exclusArr, currentIdx)
+        // Ne pas calculer d'exclu pour la prochaine manche si le mode serpentin
+        // est activé ET que la prochaine manche est la dernière (serpentin).
+        const totalNb = Number((nbPartiesInput && nbPartiesInput.value) ? nbPartiesInput.value : ((selectRotation && selectRotation.options && selectRotation.options.length) || 0))
+        const nextIdx = (typeof currentIdx === 'number') ? currentIdx + 1 : null
+        const skipNextExcluForSerpentin = nextIdx !== null && getSerpentinEnabled() && totalNb >= 2 && nextIdx === totalNb - 1
+
+        let newExclus
+        if (skipNextExcluForSerpentin) {
+          // Ensure there is no exclusion for the last serpentin manche
+          const arrCopy = Array.isArray(exclusArr) ? [...exclusArr] : []
+          while (arrCopy.length < nextIdx + 1) arrCopy.push(null)
+          arrCopy[nextIdx] = null
+          newExclus = arrCopy
+        } else {
+          newExclus = computeNextExclu(afterScores || [], exclusArr, currentIdx)
+        }
+
         if (JSON.stringify(newExclus) !== JSON.stringify(exclusArr)) {
           await setExclusTournoi(newExclus)
           try { await applyExclusToRotations(newExclus) } catch (_e) { /* ignore */ }
@@ -3732,9 +3750,27 @@ async function ensureExcluHasScoreForManche (indexRot) {
     // Si le mode de jeu est 'morts', on n'applique pas d'exclu
     if (getMode() === 'morts') return false
 
+    // Si le serpentin est activé, la dernière manche n'a pas d'exclu
+    // (on aura une table de 5). Ne pas attribuer 180 pour cette manche.
+    try {
+      const totalNb = Number((nbPartiesInput && nbPartiesInput.value) ? nbPartiesInput.value : ((selectRotation && selectRotation.options && selectRotation.options.length) || 0))
+      if (getSerpentinEnabled() && typeof indexRot === 'number' && totalNb >= 2 && indexRot === totalNb - 1) {
+        return false
+      }
+    } catch (_) { /* ignore */ }
+
     const exclusArr = await getExclusTournoi()
     if (!exclusArr || !exclusArr.length) return false
     const excluNom = exclusArr[indexRot] || null
+
+    // Defensive: if serpentin is enabled, ensure we never honor an exclu
+    // for the final serpentin manche even if present in storage.
+    try {
+      const totalNb = Number((nbPartiesInput && nbPartiesInput.value) ? nbPartiesInput.value : ((selectRotation && selectRotation.options && selectRotation.options.length) || 0))
+      if (excluNom && getSerpentinEnabled() && totalNb >= 2 && typeof indexRot === 'number' && indexRot === totalNb - 1) {
+        return false
+      }
+    } catch (_) { /* ignore */ }
     if (!excluNom) return false
 
     const scores = await getScoresTournoi()
