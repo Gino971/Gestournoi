@@ -1,0 +1,20 @@
+# Dépendances
+frontend/node_modules/
+
+# Python
+backend/__pycache__/
+*.pyc
+
+# Données locales (ne pas versionner les données de tournoi)
+backend/data/*.csv
+backend/data/*.json
+backend/data/backups/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Electron build output
+frontend/dist/
+frontend/out/
+dist/

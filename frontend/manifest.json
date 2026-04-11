@@ -1,0 +1,16 @@
+{
+  "name": "Gestion Tournoi Tarot",
+  "short_name": "Tarot",
+  "start_url": ".",
+  "display": "fullscreen",
+  "background_color": "#121212",
+  "theme_color": "#1f2933",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "build/Excuse.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
