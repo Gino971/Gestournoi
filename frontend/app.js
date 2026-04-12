@@ -3713,10 +3713,11 @@ async function renderSaisieParTable () {
           }
 
             // locked flag indicates the manche has been validated; keep it frozen
-              // but only enforce read-only here when in exclu mode. Normal mode
-              // should still allow corrections.
-              if (part && part.locked && inExcluMode) {
-            inp.readOnly = true
+            // but only enforce read-only here when in exclu mode. Normal mode
+            // should still allow corrections.
+            if (part && part.locked && inExcluMode) {
+              inp.readOnly = true
+            }
           }
 
           // Validated manche view: inputs read-only for review unless user
