@@ -1,0 +1,49 @@
+name: Build installers
+
+on:
+  push:
+    tags: [ 'v*', 'release-*' ]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    name: macOS build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Build mac installer
+        run: npm run build:mac --silent
+        working-directory: frontend
+      - name: Upload mac artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-installers
+          path: frontend/dist
+
+  build-windows:
+    name: Windows build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Build Windows installer
+        run: npm run build:win --silent
+        working-directory: frontend
+      - name: Upload windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-installers
+          path: frontend/dist

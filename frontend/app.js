@@ -152,6 +152,39 @@ async function askChoiceVertical (message, buttons) {
   })
 }
 
+// Variant of askChoice that renders dialog buttons vertically (full-width)
+async function askChoiceButtonsVertical (message, buttons) {
+  if (window.electronAPI && window.electronAPI.choice) {
+    return await window.electronAPI.choice(message, buttons)
+  }
+  // reuse internal dialog system but force the button container to vertical
+  return new Promise((resolve) => {
+    const overlay = document.getElementById('custom-dialog-overlay')
+    const msgEl = document.getElementById('custom-dialog-message')
+    const btnContainer = document.getElementById('custom-dialog-buttons')
+    if (!overlay || !msgEl || !btnContainer) { resolve(0); return }
+    msgEl.textContent = message
+    btnContainer.innerHTML = ''
+    btnContainer.className = 'custom-dialog-buttons vertical'
+
+    buttons.forEach((b, i) => {
+      const btn = document.createElement('button')
+      btn.textContent = b
+      btn.className = i === buttons.length - 1 ? 'custom-dialog-btn-secondary' : 'custom-dialog-btn-primary'
+      btn.addEventListener('click', () => { close(i) })
+      btnContainer.appendChild(btn)
+    })
+
+    overlay.classList.remove('hidden')
+    const first = btnContainer.querySelector('button')
+    if (first) first.focus()
+
+    function onKey (e) { if (e.key === 'Escape') close(buttons.length - 1) }
+    document.addEventListener('keydown', onKey)
+    function close (idx) { document.removeEventListener('keydown', onKey); overlay.classList.add('hidden'); resolve(idx) }
+  })
+}
+
 // Small ephemeral validation bubble near an input
 function getRequiredDivisor (playersOrSize) {
   if (Array.isArray(playersOrSize)) {
@@ -990,37 +1023,38 @@ if (nbPartiesParMancheInput) {
 const rotationsResultDiv = document.getElementById('rotations-result')
 const btnQuitter = document.getElementById('btn-quitter')
 
-if (!window.electronAPI) {
-  // --- Mode web (tablette) : plein écran au premier geste ---
-  let fsRequested = false
-  const tryFullscreen = () => {
-    if (!fsRequested && !document.fullscreenElement) {
-      fsRequested = true
-      document.documentElement.requestFullscreen().catch(() => { fsRequested = false })
-    }
-  }
-  // Un seul essai au premier toucher — n'interfère pas avec les boutons
-  document.addEventListener('touchstart', tryFullscreen, { once: true, passive: true })
-
-  if (btnQuitter) {
-    // Bouton bascule plein écran (pas quitter — on est en mode web)
-    btnQuitter.title = 'Plein écran'
-    btnQuitter.textContent = '🔲'
-    btnQuitter.addEventListener('click', () => {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {})
-      } else {
-        document.exitFullscreen().catch(() => {})
-      }
-    })
-  }
-} else if (btnQuitter) {
+// Always present a Quit button in the header. In Electron it calls the
+// native quit handler; in a browser it attempts to close the window or
+// shows a fallback message if that isn't permitted.
+if (btnQuitter) {
   btnQuitter.title = 'Quitter'
   btnQuitter.textContent = '❌'
   btnQuitter.addEventListener('click', () => {
-    if (window.electronAPI && window.electronAPI.quitApp) {
-      window.electronAPI.quitApp()
-    }
+    try {
+      if (window.electronAPI && window.electronAPI.quitApp) {
+        window.electronAPI.quitApp()
+        return
+      }
+    } catch (_e) { /* ignore */ }
+
+    // 1) Try direct close()
+    try { window.close() } catch (_e) {}
+
+    // 2) If not closed, try open self then close (works in some browsers)
+    setTimeout(() => {
+      try {
+        const w = window.open('', '_self')
+        if (w) { try { w.close() } catch (_e) {} ; return }
+      } catch (_e) {}
+
+      // 3) As a last resort navigate to a blank page to at least leave the app UI
+      try { window.location.href = 'about:blank' } catch (_e) {}
+
+      // 4) Final fallback: inform the user they must close manually
+      setTimeout(() => {
+        try { showAlert("Impossible de quitter depuis le navigateur. Fermez l'onglet ou la fenêtre manuellement.") } catch (_e) {}
+      }, 300)
+    }, 200)
   })
 }
 
@@ -1153,24 +1187,7 @@ try { if (cbSerpentin) cbSerpentin.checked = !!localStorage.getItem('tarot_serpe
 if (cbSerpentin) cbSerpentin.addEventListener('change', () => { try { localStorage.setItem('tarot_serpentin', cbSerpentin.checked ? '1' : '') } catch (_e) {} })
 // Normal table-based "feuille" mode removed — use the Saisie UI (renderSaisie) and #container-saisie
 
-// helper: return array of player names that lack a total for the previous
-// rotation index. used only for user feedback when a disabled option is
-// clicked. if tournament scores are unavailable we return an empty list.
-async function computeMissingPlayersForRotation (rotationIdx) {
-  if (rotationIdx <= 0) return []
-  try {
-    const scores = await getScoresTournoi()
-    const prevIdx = rotationIdx - 1
-    return (listeTournoi || []).filter(nomJoueur => {
-      const row = findRowByName(scores, nomJoueur)
-      // We consider a total present when the row has at least prevIdx+2 items
-      // (name + score for each rotation up to prevIdx) – zero counts as value.
-      return !(row && row.length >= prevIdx + 2)
-    })
-  } catch (_e) {
-    return []
-  }
-}
+// (Removed) previous check for missing players before allowing rotation selection.
 
 // Listeners pour les selects
 if (selectRotation) selectRotation.addEventListener('change', async () => {
@@ -1180,20 +1197,7 @@ if (selectRotation) selectRotation.addEventListener('change', async () => {
   const index = selectRotation.selectedIndex
   const option = selectRotation.options[index]
 
-  // always compute any missing players so we can warn, even if we no longer block selection
-  let missingArr = []
-  try { missingArr = await computeMissingPlayersForRotation(index) } catch (_e) {}
-  if (missingArr.length) {
-    const missingMsg = missingArr.join(', ')
-    if (option && option.disabled) {
-      // old-style alert when rotation still locked
-      showAlert(`Cette rotation n'est pas encore accessible.\nJoueurs n'ayant pas fini la manche précédente :\n${missingMsg}`)
-      return
-    } else {
-      // warn user but allow the selection
-      showAlert(`Joueurs n'ayant pas fini la manche précédente :\n${missingMsg}`)
-    }
-  }
+  // Removed check that required all players to have scores before allowing rotation change.
   if (option && option.disabled) {
     // still bail out if somehow disabled (shouldn't happen normally)
     return
@@ -1821,6 +1825,14 @@ function getMode () {
   try {
     return localStorage.getItem('tarot_mode') || 'normal'
   } catch (_e) { return 'normal' }
+}
+
+// Helper: read mortal divisor preference (2 or 3) from localStorage
+function getMortsDivisor () {
+  try {
+    const v = Number(localStorage.getItem('morts_divisor'))
+    return (v === 2 || v === 3) ? v : null
+  } catch (_e) { return null }
 }
 
 // Toast non-bloquant (top-right)
@@ -3007,15 +3019,20 @@ async function validateAndPersistTable (tData, tblEl, mancheIndex = -1) {
 
       let rowScores = new Array(tableSize).fill(0)
       if (filled.length === 0) {
-        rowScores = new Array(tableSize).fill(0)
+        // Preserve previous behavior for 5-player tables (pre-filled zeros).
+        // For other table sizes, keep values as `null` so inputs stay empty
+        // instead of showing spurious "0" entries when nothing was entered.
+        if (tableSize === 5) rowScores = new Array(tableSize).fill(0)
+        else rowScores = new Array(tableSize).fill(null)
       } else if (filled.length === 1) {
         const attackerInput = filled[0]
         const attackerVal = Number(attackerInput.value)
         const attackerCol = Number(attackerInput.dataset.colIdx || 0)
         const validationArg = (Array.isArray(tData.players) && tData.players.some(p => String(p || '').toUpperCase().startsWith('MORT'))) ? tData.players : tableSize
-        if (!validateAttackerDivisibility(attackerVal, validationArg)) {
+        const mortDiv = (getMode && getMode() === 'morts') ? getMortsDivisor() : null
+        if (!validateAttackerDivisibility(attackerVal, validationArg, mortDiv)) {
           // Show explanatory bubble and skip persisting this table for now
-          const div = getRequiredDivisor(validationArg)
+          const div = (mortDiv && (mortDiv === 2 || mortDiv === 3)) ? mortDiv : getRequiredDivisor(validationArg)
           try { showValidationBubble(attackerInput, `Valeur invalide — multiple de ${div} requis`) } catch (_e) {}
           try { attackerInput.focus(); attackerInput.select() } catch (_e) {}
           // mark as not fully filled so persistence won't transfer
@@ -3027,7 +3044,7 @@ async function validateAndPersistTable (tData, tblEl, mancheIndex = -1) {
         inputs.forEach((inp, idx) => {
           if (inp.disabled) exemptIndices.add(idx)
         })
-        rowScores = placeAttackerAtIndex(attackerVal, validationArg, attackerCol, exemptIndices)
+        rowScores = placeAttackerAtIndex(attackerVal, validationArg, attackerCol, exemptIndices, mortDiv)
       } else {
         for (let c = 0; c < tableSize; c++) rowScores[c] = (inputs[c] && inputs[c].value !== '') ? Number(inputs[c].value) : null
       }
@@ -3619,9 +3636,10 @@ async function renderSaisieParTable () {
           const attackerCol = Number(attackerInput.dataset.colIdx || 0)
 
           const validationArg = (Array.isArray(tData.players) && tData.players.some(p => String(p || '').toUpperCase().startsWith('MORT'))) ? tData.players : tableSize
-          if (!validateAttackerDivisibility(attackerVal, validationArg)) {
+          const mortDiv = (getMode && getMode() === 'morts') ? getMortsDivisor() : null
+          if (!validateAttackerDivisibility(attackerVal, validationArg, mortDiv)) {
             // invalid divisibility — show bubble and do not compute defenders
-            const div = getRequiredDivisor(validationArg)
+            const div = (mortDiv && (mortDiv === 2 || mortDiv === 3)) ? mortDiv : getRequiredDivisor(validationArg)
             try { showValidationBubble(attackerInput, `Valeur invalide — multiple de ${div} requis`) } catch (_e) {}
             try { attackerInput.focus(); attackerInput.select() } catch (_e) {}
             return
@@ -3638,7 +3656,8 @@ async function renderSaisieParTable () {
               }
             }
           })
-          let rowScores = placeAttackerAtIndex(attackerVal, validationArg, attackerCol, exemptIndices)
+          const mortDivLocal = (getMode && getMode() === 'morts') ? getMortsDivisor() : null
+          let rowScores = placeAttackerAtIndex(attackerVal, validationArg, attackerCol, exemptIndices, mortDivLocal)
           // Zero out Morts
           for (let c = 0; c < tableSize; c++) {
             const pname = tData.players[c] || ''
@@ -3718,7 +3737,7 @@ async function renderSaisieParTable () {
             if (part && part.locked && inExcluMode) {
               inp.readOnly = true
             }
-          }
+          
 
           // Validated manche view: inputs read-only for review unless user
           // toggled edit mode (isValidatedMancheView === true => read-only)
@@ -4014,39 +4033,44 @@ btnTirage.addEventListener('click', async () => {
       }
 
       // Proposition des options en une seule boîte
-      const message = `Le nombre de joueurs (${listeTournoi.length}) n'est pas un multiple de 4.\n\nChoisissez une option :`
-      const buttons = []
-      buttons.push(`Ajouter ${aAjouter} "Mort(s)"`)
-      buttons.push('Créer des tables de 5 ou 6 joueurs')
-      if (reste === 1) buttons.push('Mode joueur exclu')
-      buttons.push('Annuler')
+        // Proposition des options en une seule boîte (verticales, avec choix Morts X2/X3)
+        const message = `Le nombre de joueurs (${listeTournoi.length}) n'est pas un multiple de 4.\n\nChoisissez une option :`
+        const buttons = []
+        buttons.push(`Ajouter ${aAjouter} "Mort(s)" — Score X2`)
+        buttons.push(`Ajouter ${aAjouter} "Mort(s)" — Score X3`)
+        buttons.push('Créer des tables de 5 ou 6 joueurs')
+        if (reste === 1) buttons.push('Mode joueur exclu')
+        buttons.push('Annuler')
 
-      const choice = await askChoice(message, buttons)
-      const selected = buttons[choice]
+        const choice = await askChoiceButtonsVertical(message, buttons)
+        const selected = buttons[choice]
 
-      if (selected && selected.startsWith('Ajouter')) { // Ajouter morts
-        for (let i = 0; i < aAjouter; i++) {
-          let k = 1
-          while (
-            listeTournoi.some((n) => n && String(n).toUpperCase() === `MORT ${k}`)
-          ) {
-            k++
+        if (selected && selected.startsWith('Ajouter')) { // Ajouter morts (avec choix X2/X3)
+          // determine divisor from label
+          const divisor = selected.includes('X2') ? 2 : 3
+          try { localStorage.setItem('morts_divisor', String(divisor)) } catch (_e) {}
+          for (let i = 0; i < aAjouter; i++) {
+            let k = 1
+            while (
+              listeTournoi.some((n) => n && String(n).toUpperCase() === `MORT ${k}`)
+            ) {
+              k++
+            }
+            listeTournoi.push(`Mort ${k}`)
           }
-          listeTournoi.push(`Mort ${k}`)
-        }
-        // Marquer le mode de jeu explicitement comme 'morts'
-        setMode('morts')
-        renderListeTournoi()
-        await renderListeGenerale()
-        scheduleSaveListeTournoi()
-      } else if (selected === 'Créer des tables de 5 ou 6 joueurs') { // Tables 5/6
-        // Mettre le mode à 'tables56'
-        setMode('tables56')
-        // Rien d'autre à changer
-      } else if (selected === 'Mode joueur exclu') { // Mode exclu
-        setMode('exclu')
-        const buttonsExclu = [...listeTournoi, 'Annuler']
-        const messageExclu = 'Choisissez le premier joueur exclu :'
+          // Marquer le mode de jeu explicitement comme 'morts'
+          setMode('morts')
+          renderListeTournoi()
+          await renderListeGenerale()
+          scheduleSaveListeTournoi()
+        } else if (selected === 'Créer des tables de 5 ou 6 joueurs') { // Tables 5/6
+          // Mettre le mode à 'tables56'
+          setMode('tables56')
+          // Rien d'autre à changer
+        } else if (selected === 'Mode joueur exclu') { // Mode exclu
+          setMode('exclu')
+          const buttonsExclu = [...listeTournoi, 'Annuler']
+          const messageExclu = 'Choisissez le premier joueur exclu :'
         // Afficher une liste verticale et scrollable pour un grand nombre de joueurs
         const choiceExclu = await askChoiceVertical(messageExclu, buttonsExclu)
         if (choiceExclu < listeTournoi.length) {

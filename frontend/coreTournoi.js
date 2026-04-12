@@ -165,7 +165,7 @@ export function reportScoreDefense (feuille, indexAttaquant, scoreAttaquant, exe
 // attackerScore: number
 // tableSizeOrPlayers: either numeric table size or array of player names
 // exemptIndices: optional Set<number> of positions that should be ignored
-export function distributeAttackerScore (attackerScore, tableSizeOrPlayers, exemptIndices = new Set()) {
+export function distributeAttackerScore (attackerScore, tableSizeOrPlayers, exemptIndices = new Set(), divisorOverride = null) {
   const res = []
   // If caller provided players array, respect Mort placeholders ("MORT...")
   if (Array.isArray(tableSizeOrPlayers)) {
@@ -176,7 +176,7 @@ export function distributeAttackerScore (attackerScore, tableSizeOrPlayers, exem
     // treat exempt indices like morts for active count
     const nbActifs = Math.max(1, tableSize - mortCount - exemptIndices.size)
     const nbDefenseurs = Math.max(1, nbActifs - 1)
-    const def = -attackerScore / nbDefenseurs
+    const def = (divisorOverride && (divisorOverride === 2 || divisorOverride === 3)) ? -attackerScore / divisorOverride : -attackerScore / nbDefenseurs
     // attacker at index 0, defenders placed for non-mort/non-exempt seats; others get 0
     res.push(attackerScore)
     for (let i = 1; i < tableSize; i++) {
@@ -192,25 +192,27 @@ export function distributeAttackerScore (attackerScore, tableSizeOrPlayers, exem
     res.push(attackerScore, def, def)
     return res
   }
-  // tableSize >= 4 : defenders share divided by 3 (legacy behaviour)
-  const def = -attackerScore / 3
+  // tableSize >= 4 : allow optional override (2 or 3), otherwise legacy (/3)
+  const def = (divisorOverride && (divisorOverride === 2 || divisorOverride === 3)) ? -attackerScore / divisorOverride : -attackerScore / 3
   res.push(attackerScore)
   for (let i = 1; i < tableSize; i++) res.push(def)
   return res
 }
 
-export function validateAttackerDivisibility (attackerScore, tableSizeOrPlayers) {
+export function validateAttackerDivisibility (attackerScore, tableSizeOrPlayers, divisorOverride = null) {
   if (Array.isArray(tableSizeOrPlayers)) {
     const players = tableSizeOrPlayers
     const isMort = players.map(p => String(p || '').toUpperCase().startsWith('MORT'))
     const mortCount = isMort.filter(Boolean).length
     const nbActifs = Math.max(1, players.length - mortCount)
     const nbDefenseurs = Math.max(1, nbActifs - 1)
-    return (attackerScore % nbDefenseurs) === 0
+    const divisor = (divisorOverride && (divisorOverride === 2 || divisorOverride === 3)) ? divisorOverride : nbDefenseurs
+    return (attackerScore % divisor) === 0
   }
   const tableSize = Number(tableSizeOrPlayers || 0)
   if (tableSize === 3) return (attackerScore % 2) === 0
-  return (attackerScore % 3) === 0
+  const divisor = (divisorOverride && (divisorOverride === 2 || divisorOverride === 3)) ? divisorOverride : 3
+  return (attackerScore % divisor) === 0
 }
 
 /**
@@ -221,7 +223,7 @@ export function validateAttackerDivisibility (attackerScore, tableSizeOrPlayers)
  */
 // attackerIndex: where the attacker sits (0-based)
 // exemptIndices: optional Set of positions to exclude from sharing
-export function placeAttackerAtIndex (attackerScore, tableSizeOrPlayers, attackerIndex, exemptIndices = new Set()) {
+export function placeAttackerAtIndex (attackerScore, tableSizeOrPlayers, attackerIndex, exemptIndices = new Set(), divisorOverride = null) {
   const playersProvided = Array.isArray(tableSizeOrPlayers)
   const tableSize = playersProvided ? tableSizeOrPlayers.length : Number(tableSizeOrPlayers || 0)
   // rotate exempt indices into the "base" orientation where index 0 is the attacker
@@ -230,7 +232,7 @@ export function placeAttackerAtIndex (attackerScore, tableSizeOrPlayers, attacke
     const b = ((idx - attackerIndex) % tableSize + tableSize) % tableSize
     rotatedExempt.add(b)
   }
-  const base = distributeAttackerScore(attackerScore, tableSizeOrPlayers, rotatedExempt)
+  const base = distributeAttackerScore(attackerScore, tableSizeOrPlayers, rotatedExempt, divisorOverride)
   const res = new Array(tableSize).fill(0)
   for (let i = 0; i < tableSize; i++) {
     const target = (i + attackerIndex) % tableSize
