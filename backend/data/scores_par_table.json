@@ -1,0 +1,223 @@
+[
+  {
+    "table": 1,
+    "players": [
+      "Michel Labb",
+      "Nicole",
+      "Michel P.",
+      "Robert"
+    ],
+    "parties": [
+      {
+        "partie": 1,
+        "scores": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      },
+      {
+        "partie": 2,
+        "scores": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      },
+      {
+        "partie": 3,
+        "scores": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      },
+      {
+        "partie": 4,
+        "scores": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      },
+      {
+        "partie": 5,
+        "scores": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      },
+      {
+        "partie": 6,
+        "scores": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      }
+    ],
+    "totals": [
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "table": 2,
+    "players": [
+      "Monique Ex.",
+      "Marie-Pierre",
+      "Michel Gg",
+      "Patrick L."
+    ],
+    "parties": [
+      {
+        "partie": 1,
+        "scores": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      },
+      {
+        "partie": 2,
+        "scores": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      },
+      {
+        "partie": 3,
+        "scores": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      },
+      {
+        "partie": 4,
+        "scores": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      },
+      {
+        "partie": 5,
+        "scores": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      },
+      {
+        "partie": 6,
+        "scores": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      }
+    ],
+    "totals": [
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "table": 3,
+    "players": [
+      "Pierre",
+      "Monique",
+      "Patrice L.",
+      "Marie-Lou"
+    ],
+    "parties": [
+      {
+        "partie": 1,
+        "scores": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      },
+      {
+        "partie": 2,
+        "scores": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      },
+      {
+        "partie": 3,
+        "scores": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      },
+      {
+        "partie": 4,
+        "scores": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      },
+      {
+        "partie": 5,
+        "scores": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "locked": false
+      }
+    ],
+    "totals": [
+      0,
+      0,
+      0,
+      0
+    ]
+  }
+]

@@ -1323,6 +1323,10 @@ export let dernierDictRotations = null
 // utility for tests: allow resetting rotation data
 export function setDernierDictRotations(val) { dernierDictRotations = val; }
 
+// Toggle to allow editing of a validated manche snapshot (disabled by default)
+// Enable editing of validated manches by default (no banner/button shown)
+let validatedEditMode = true
+
 // Guard for concurrent Saisie renders
 let _renderingSaisieLock = false
 // remember the last rotation key rendered so we can detect manual switches
@@ -2997,7 +3001,7 @@ async function validateAndPersistTable (tData, tblEl, mancheIndex = -1) {
         })
         rowScores = placeAttackerAtIndex(attackerVal, validationArg, attackerCol, exemptIndices)
       } else {
-        for (let c = 0; c < tableSize; c++) rowScores[c] = inputs[c] && inputs[c].value !== '' ? Number(inputs[c].value) : 0
+        for (let c = 0; c < tableSize; c++) rowScores[c] = (inputs[c] && inputs[c].value !== '') ? Number(inputs[c].value) : null
       }
 
       // Zero out Morts
@@ -3013,7 +3017,7 @@ async function validateAndPersistTable (tData, tblEl, mancheIndex = -1) {
         const inp = inputs[c]
         if (!inp || inp.disabled) continue
         const v = rowScores[c]
-        inp.value = (v === 0 || v === null || v === undefined) ? '' : String(v)
+        inp.value = (v === null || v === undefined) ? '' : String(v)
       }
 
       // accumulate totals
@@ -3351,11 +3355,13 @@ async function renderSaisieParTable () {
     // Check if this rotation has a validated snapshot (past manche review)
     const validatedSnapshot = loadValidatedMancheSnapshot(nomRot)
     const isValidatedManche = !!validatedSnapshot
-
+    // If a validated snapshot exists, use it as the display base. When
+    // `validatedEditMode` is false the view will be read-only; when true the
+    // same snapshot is used but inputs are editable so users can adjust values.
     if (isValidatedManche) {
-      // Use the validated snapshot for display (read-only)
-      normalizedTables = validatedSnapshot
+      try { normalizedTables = JSON.parse(JSON.stringify(validatedSnapshot)) } catch (_e) { normalizedTables = validatedSnapshot }
     }
+    const isValidatedMancheView = isValidatedManche && !validatedEditMode
 
     // if the rotation key changed since last render, wipe every table completely
     // (similar to clicking the trash icon) so old scores cannot leak into a
@@ -3429,13 +3435,7 @@ async function renderSaisieParTable () {
       }
     } catch (_e) {}
 
-    // Show a banner when reviewing a validated (past) manche
-    if (isValidatedManche) {
-      const banner = document.createElement('div')
-      banner.style.cssText = 'padding:8px 16px;background:#2a5d2a;color:#c8f7c8;border-radius:6px;margin-bottom:10px;text-align:center;font-weight:600;font-size:14px;'
-      banner.textContent = '\u2714 Manche valid\u00e9e \u2014 scores en lecture seule'
-      containerSaisie.appendChild(banner)
-    }
+    // (validated snapshot is used as base; editing is allowed directly)
 
     normalizedTables.forEach((tData) => {
       const divTable = document.createElement('div')
@@ -3452,7 +3452,7 @@ async function renderSaisieParTable () {
       title.style.margin = '0 0 10px 0'
       title.style.textAlign = 'center'
       // add trash icon for clearing this table (replaces reset button)
-      if (!isValidatedManche) {
+      if (!isValidatedManche || validatedEditMode) {
       const trashIcon = document.createElement('span')
       trashIcon.className = 'btn-trash'
       trashIcon.textContent = '🗑︎'
@@ -3658,8 +3658,9 @@ async function renderSaisieParTable () {
             inp.disabled = false
           }
 
-          // Validated manche: all inputs read-only for review
-          if (isValidatedManche) {
+          // Validated manche view: inputs read-only for review unless user
+          // toggled edit mode (isValidatedMancheView === true => read-only)
+          if (isValidatedManche && !validatedEditMode) {
             inp.readOnly = true
             inp.style.opacity = '0.85'
           }
@@ -3675,7 +3676,9 @@ async function renderSaisieParTable () {
           } catch (_e) {}
 
           // When the value changes, clear other cells in the row then compute
-          if (!isValidatedManche) {
+          // allow changes when NOT in validated read-only view (i.e. either
+          // normal mode or validatedEditMode === true)
+          if (!(isValidatedManche && !validatedEditMode)) {
           inp.onchange = async (ev) => {
             const rowInputs = Array.from(tr.querySelectorAll('input'))
             rowInputs.forEach((ri) => {
