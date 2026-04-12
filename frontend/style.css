@@ -1,0 +1,2271 @@
+/* ==========================================================================
+   RESET & GLOBALS
+   ========================================================================== */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #121212;
+  color: #f5f5f5;
+}
+
+h1, h2, h3 {
+  margin: 0.5rem 0;
+}
+
+main {
+  padding: 0.75rem;
+  padding-top: 3.5rem; /* espace réduit pour le header icônes */
+}
+
+/* Custom number control: hide native spinner and provide permanent inline buttons */
+input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* Small control for nb-parties */
+.nb-parties-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.06rem; /* bring buttons closer to the input */
+}
+.nb-parties-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.04rem; /* very tight vertical spacing between the two arrows */
+  margin-left: 0.06rem; /* slight offset so buttons touch the input closely */
+} 
+.btn-small {
+  background: transparent; /* no visible background */
+  border: none; /* no border */
+  color: #ffffff; /* icônes blanches */
+  width: 18px; /* reduced to 18 */
+  height: 18px; /* reduced to 18 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: 0px;
+}
+.btn-small svg { color: currentColor; width: 8px; height: 8px; }
+.btn-small:hover { background: rgba(224, 61, 61, 0.02); }
+.btn-small:focus { outline: none; box-shadow: none; }
+.btn-small:disabled { opacity: 0.45; cursor: not-allowed; }
+
+
+
+/* ==========================================================================
+   CONFIRMATION OVERLAY (THUMB UP)
+   ========================================================================== */
+#confirmation-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: transparent; /* don't dim the whole UI */
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none; /* overlay doesn't block interactions */
+  padding: 0.5rem; /* space for the thumb card */
+}
+
+#confirmation-overlay.hidden {
+  visibility: hidden;
+  opacity: 0;
+  /* keep the element present to allow the popIn animation */
+}
+
+.thumb-up {
+  font-size: 3rem; /* smaller, less dominant */
+  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  background: rgba(0,0,0,0.6); /* small card instead of full-screen dim */
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+}
+
+@keyframes popIn {
+  0% { transform: scale(0); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Choix vertical scrollable (modal) */
+#choice-vertical-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.choice-vertical-dialog {
+  background: #0f1720;
+  border: 1px solid #2f3b43;
+  padding: 0.75rem;
+  border-radius: 8px;
+  width: min(540px, 90%);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.choice-vertical-header {
+  font-weight: 600;
+  color: #f5f5f5;
+}
+
+.choice-vertical-list {
+  overflow-y: auto;
+  max-height: 50vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+.choice-vertical-item {
+  text-align: left;
+  background: #1e272e;
+  color: #f5f5f5;
+  border: 1px solid #37474f;
+  padding: 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.choice-vertical-item:hover {
+  background: #2a3a44;
+}
+
+.choice-vertical-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+
+/* ==========================================================================
+   NAVIGATION (HEADER)
+   ========================================================================== */
+header {
+  background: #1f2933;
+  color: #f5f5f5;
+  padding: 0.35rem 0.5rem;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+header h1 {
+  display: none;
+}
+
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+nav button {
+  border: none;
+  background: #2f3f49;
+  color: #dfeff6;
+  padding: 0.4rem 0.55rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1.35rem;
+  line-height: 1;
+  transition: background 180ms ease, transform 120ms ease, box-shadow 180ms ease, opacity 120ms ease;
+}
+
+nav button:hover {
+  background: #3e566b;
+}
+
+/* Active nav button: stronger visual emphasis */
+nav button.active, .btn-nav-action.active {
+  background: linear-gradient(180deg, #1e88e5, #1976d2); /* brighter blue */
+  color: #ffffff;
+  font-weight: 600;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  border-bottom: 3px solid #ffb300; /* yellow accent to match totals */
+}
+
+/* Locked / disabled nav buttons */
+nav button.locked, .btn-nav-action.locked, nav button[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(12%);
+  pointer-events: none;
+}
+
+/* Boutons d'action (Joueurs, Saisie) */
+.btn-nav-action {
+  background: #3d5767; /* slightly brighter than base */
+  border: 1px solid #5a7385;
+}
+.btn-nav-action:hover {
+  background: #4e6d82;
+}
+
+/* Subtle accessibility: focus outline for keyboard navigation */
+nav button:focus {
+  outline: 2px solid rgba(129, 212, 250, 0.25);
+  outline-offset: 2px;
+}
+
+/* Groupe droite */
+.nav-right-container {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.nav-save-restore-group {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.nav-save-restore-group button {
+  font-size: 1.35rem;
+  padding: 0.4rem 0.55rem;
+  line-height: 1;
+}
+
+/* Bouton Plein écran */
+#btn-quitter {
+  background-color: #2f3f49;
+}
+
+#btn-quitter:hover {
+  background-color: #3e566b;
+}
+
+
+/* ==========================================================================
+   COMPONENTS: BUTTONS & INPUTS
+   ========================================================================== */
+button {
+  font-family: inherit;
+}
+
+.btn-primary {
+  background: #1976d2;
+  color: #fff;
+  border: none;
+  padding: 0.4rem 0.7rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.btn-primary:hover {
+  background: #1e88e5;
+}
+
+/* Bouton suppression standardisé sur toutes les pages */
+.btn-delete-action {
+  background: transparent;
+  color: #ff5252;
+  border: 1px solid #ff5252;
+  padding: 0.4rem 0.7rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  transition: all 0.2s;
+}
+
+/* Legacy UI for the normal 'feuille' mode has been removed.
+   The app uses the single 'Saisie' interface (renderSaisie / #container-saisie).
+   If any residual hidden elements remain, remove their markup from the HTML. */
+#container-saisie { display: block !important; }
+
+/* Ensure per-table saisie inputs are visible in dark mode */
+#container-saisie table input[type=number] {
+  background: #111;
+  color: #fff; /* readable on dark backgrounds */
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 1px;
+  border-radius: 4px;
+  width: 60px; /* reduced per user request */
+  box-sizing: border-box;
+  outline: none;
+}
+#container-saisie table input[type=number]:focus {
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+  border-color: rgba(59,130,246,0.7);
+}
+#container-saisie table td { vertical-align: middle; }
+
+/* Saisie-specific compact rules: prefer class-driven sizing (avoid inline styles)
+   These ensure inputs and their cells are compact and table layout is stable. */
+.saisie-card table {
+  table-layout: fixed;
+}
+.saisie-card td.input-cell {
+  width: 60px;
+  padding: 1px;
+  text-align: center;
+}
+.saisie-card {
+  width: 340px; /* adjusted per user request */
+  display: inline-block;
+  vertical-align: top;
+  margin: 0.4rem; /* spacing between cards */
+  padding: 0.37rem; /* inner breathing room */
+  border-radius: 8px;
+  background: rgba(241, 37, 54, 0.95);
+  /* stronger visible contour */
+  border: 4px solid rgba(44, 246, 17, 0.18);
+  }
+.saisie-card td.input-cell > input,
+#container-saisie table input[type=number].saisie-input {
+  width: 60px;
+  padding: 1px;
+  box-sizing: border-box;
+}
+
+/* Inputs for 'Mort' seats: distinct background to make them obvious */
+#container-saisie table input.saisie-input.mort-input,
+.saisie-card td.input-cell > input.mort-input {
+  background: #282727; /* bright yellow */
+  color: #000; /* dark text for contrast */
+  font-weight: 700;
+  border: 1px solid rgba(0,0,0,0.12);
+}
+
+.btn-delete-action:hover {
+  background: rgba(255, 82, 82, 0.15);
+  color: #ff8a80;
+  border-color: #ff8a80;
+}
+/* Inline SVGs are used for trash icons now; remove emoji pseudo-element */
+
+/* Ensure SVG icons inside nav buttons match emoji sizing */
+.btn-nav-action svg {
+  width: 1.25em;
+  height: 1.25em;
+  vertical-align: middle;
+  display: inline-block;
+}
+
+/* No plan-specific sizing — use default nav button sizing and SVG rules */
+.btn-delete-action::before { content: none; }
+
+/* Ensure SVGs inside delete buttons inherit the color */
+.btn-delete-action svg, .btn-trash svg { stroke: currentColor; fill: none; width: 16px; height: 16px; display: block; }
+
+/* Icon-only variant for header/delete controls */
+.btn-delete-action.btn-icon {
+  border: none;
+  padding: 0.15rem;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: transparent;
+  color: #ff5252;
+  font-size: 1rem;
+  gap: 0;
+  /* Try to recolor platform emoji by applying a CSS filter (best‑effort) */
+  -webkit-filter: sepia(1) saturate(8000%) hue-rotate(-10deg) brightness(0.95);
+  filter: sepia(1) saturate(8000%) hue-rotate(-10deg) brightness(0.95);
+}
+.btn-delete-action.btn-icon::before { font-size: 1.2rem; }
+
+.liste-generale-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;   /* push controls to the right so the title stays visible */
+  width: auto;
+  justify-content: flex-end;
+}
+/* Make the header add form compact (do not stretch) */
+.liste-generale-controls .form-add-joueur { flex: 0 0 auto; margin-right: 0.25rem; }
+/* Larger input requested by user but keep responsive cap */
+.liste-generale-controls .input-search-joueur { width: 400px; max-width: 60%; }
+
+/* Input + add icon attached */
+.input-with-add { display: inline-flex; align-items: center; gap: 0; }
+.input-with-add .input-search-joueur { border-top-right-radius: 0; border-bottom-right-radius: 0; margin: 0; }
+.input-with-add .header-add-btn { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 0; border-left: none; padding: 0.2rem 0.6rem; display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 600; box-sizing: border-box; }
+
+/* SVG sizing for the add icon */
+.btn-add-icon svg { width: 18px; height: 18px; display: block; }
+/* Touch-friendly add button */
+.header-add-btn { padding: 0.45rem 0.9rem; font-size: 1.4rem; }
+.liste-generale-controls .btn-delete-action.btn-icon { margin-left: auto; flex-shrink: 0; align-self: center; }
+
+/* Ensure the header title stays on a single line */
+.col-liste-generale > .flex-row { flex-wrap: wrap; align-items: center; }
+.col-liste-generale .h3-nomargin { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.liste-generale-controls { flex: 1 1 auto; min-width: 0; }
+
+/* Generic screen header: title + actions on one line */
+.screen-header {
+  position: relative; /* allow absolute centering inside */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.screen-header .actions { margin-left: 1rem; }
+
+/* Title wrapper that keeps the title and its immediate icon together */
+.screen-title { display: inline-flex; align-items: center; gap: 0.5rem; }
+.screen-title h2 { margin: 0; display: inline-block; }
+.screen-title .btn-delete-action.btn-icon { margin-left: 0; padding-left: 0.25rem; padding-right: 0.25rem; }
+
+/* Center area within a screen header (three-column layout) */
+.screen-center { flex: 1 1 auto; display: flex; justify-content: center; align-items: center; }
+
+/* Ensure the centered button doesn't overlap title on very small screens */
+@media (max-width: 560px) {
+  .screen-center { order: 3; width: 100%; justify-content: flex-start; margin-top: 0.4rem; }
+  .screen-header { flex-wrap: wrap; }
+}
+
+.btn-secondary {
+  background: #263238;
+  color: #f5f5f5;
+  border: 1px solid #455a64;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.btn-secondary:hover {
+  background: #37474f;
+}
+
+/* Visual acknowledgement classes for the lucky-draw button (temporary, subtle) */
+.btn-secondary.lucky-click-flash {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35), 0 0 0 6px rgba(255, 235, 59, 0.06);
+  transition: transform 140ms ease, box-shadow 260ms ease;
+}
+
+.btn-secondary.lucky-no-data {
+  animation: luckyNoData 900ms ease-in-out;
+  border-color: #ff8a80;
+  box-shadow: 0 0 0 8px rgba(244,67,54,0.06);
+}
+
+@keyframes luckyNoData {
+  0% { box-shadow: 0 0 0 0 rgba(244,67,54,0); }
+  50% { box-shadow: 0 0 0 10px rgba(244,67,54,0.08); }
+  100% { box-shadow: 0 0 0 0 rgba(244,67,54,0); }
+}
+
+.btn-danger {
+  color: #ff5252;
+  border-color: #ff5252;
+}
+
+/* Corbeilles petites (joueurs + dates) */
+.btn-trash,
+.btn-del-manche,
+.btn-del-date {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.7rem;
+  color: #bdbdbd; /* neutral for row-level trash icons */
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-filter: none; /* do not attempt recolor for row icons */
+  filter: none;
+}
+
+.btn-del-date {
+  font-size: 0.9rem;
+  margin-left: 0.2rem;
+  opacity: 0.7;
+}
+
+.btn-trash:hover,
+.btn-del-date:hover,
+.btn-del-manche:hover {
+  color: #ffffff;
+  opacity: 1;
+} 
+
+/* Make header-level delete icons red (recap, backups, clear-list, scores/classement) */
+#btn-vider-liste-generale.btn-delete-action.btn-icon,
+#btn-clear-joueurs-tournoi.btn-delete-action.btn-icon,
+#btn-effacer-soiree.btn-delete-action.btn-icon,
+#btn-effacer-classement.btn-delete-action.btn-icon,
+#btn-effacer-cognin.btn-delete-action.btn-icon,
+.btn-del-recap,
+.btn-delete-backup {
+  color: #ff5252;
+  -webkit-filter: sepia(1) saturate(8000%) hue-rotate(-10deg) brightness(0.95);
+  filter: sepia(1) saturate(8000%) hue-rotate(-10deg) brightness(0.95);
+}
+
+/* Hover for header delete icons (red ones) */
+#btn-vider-liste-generale.btn-delete-action.btn-icon:hover,
+#btn-clear-joueurs-tournoi.btn-delete-action.btn-icon:hover,
+#btn-effacer-soiree.btn-delete-action.btn-icon:hover,
+#btn-effacer-classement.btn-delete-action.btn-icon:hover,
+
+/* 5-player dealer input styling */
+input.dealer-input {
+  background-color: #444; /* slightly lighter than normal cells */
+  color: #ccc;
+}
+
+td.dealer-cell {
+  background-color: #2a2a2a;
+}
+#btn-effacer-cognin.btn-delete-action.btn-icon:hover,
+.btn-del-recap:hover,
+.btn-delete-backup:hover {
+  color: #ff8a80;
+}
+
+/* Inputs */
+input[type="text"],
+input[type="number"],
+input[type="date"],
+input[type="search"],
+select {
+  font-family: inherit;
+  font-size: 0.9rem;
+  padding: 0.2rem 0.3rem;
+  border-radius: 4px;
+  border: 1px solid #455a64;
+  background: #1e272e;
+  color: #f5f5f5;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="date"]:focus,
+input[type="search"]:focus,
+select:focus {
+  outline: none;
+  border-color: #81d4fa;
+}
+
+
+/* ==========================================================================
+   GLOBAL LAYOUT HELPERS
+   ========================================================================== */
+.screen {
+  margin-top: 0.5rem;
+}
+
+.hidden {
+  display: none;
+}
+
+/* Utilities */
+.ml-auto { margin-left: auto; }
+.spacer { flex: 1; }
+.flex-between-center {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.gap-05 { gap: 0.5rem; }
+.flex-row { display: flex; }
+.align-center { align-items: center; }
+.mb-2 { margin-bottom: 0.5rem; }
+
+.actions {
+  margin: 0.5rem 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* Center the lucky-draw button within the Scores Tournoi actions (absolute center) */
+#screen-soiree .actions { position: relative; }
+#screen-soiree .actions #btn-lucky-draw {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+}
+#screen-soiree .actions #btn-lucky-draw + button { margin-left: 0.5rem; }
+
+/* Also support the button being placed inside `.screen-center` (markup was moved there).
+   Keep both selectors so older markup or future refactors continue to work. */
+#screen-soiree .screen-center { position: relative; }
+#screen-soiree .screen-center #btn-lucky-draw {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+}
+#screen-soiree .screen-center #btn-lucky-draw + button { margin-left: 0.5rem; }
+
+/* On narrow screens, fall back to normal flow */
+@media (max-width: 600px) {
+  #screen-soiree .actions { position: static; }
+  #screen-soiree .actions #btn-lucky-draw { position: static; transform: none; margin-left: 0; }
+}
+.actions label {
+  font-size: 0.85rem;
+}
+
+/* Tables génériques */
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th, td {
+  border: 1px solid #424242;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.75rem;
+  text-align: center;
+
+  background: #022c04;
+}
+
+
+/* Utilitaires */
+.h3-nomargin { margin: 0; }
+
+/* Centre tous les titres de section */
+.screen h3 { text-align: center; }
+.label-nomargin { margin: 0; }
+
+
+/* ==========================================================================
+   SCREEN: JOUEURS / TIRAGE
+   ========================================================================== */
+
+.exclu-info {
+  color: #bdbdbd;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.exclu-header {
+  font-style: italic;
+  color: #bdbdbd;
+  margin-bottom: 0.5rem;
+}
+
+/* Affichage inline de l'exclu à côté du numéro de manche */
+.rotation-exclu-inline {
+  font-style: italic;
+  color: #bdbdbd;
+  font-size: 0.9rem;
+  margin-left: 0.5rem;
+  display: inline-block;
+  vertical-align: middle;
+}
+.rotation-exclu-inline[data-below="true"] {
+  display: block;
+  margin-left: 0;
+  margin-top: 6px;
+}
+.rotation-exclu-inline strong { color: #fff; font-weight: 600; }
+
+/* Style pour la petite bannière dans la feuille de saisie */
+#feuille-exclu-info {
+  display: block;
+  padding: 0.2rem 0.4rem;
+  background: rgba(255,255,255,0.02);
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+.label-exclu {
+  font-style: italic;
+  color: #aaa;
+  margin-left: 6px;
+  font-size: 0.9rem;
+}
+.feuille-score-exclu {
+  color: #9e9e9e;
+  font-style: italic;
+}
+
+/* Ligne ou joueur exclu dans la feuille soirée */
+.soiree-exclu {
+  background: rgba(255,193,7,0.08);
+  color: #b26900;
+  font-style: italic;
+}
+
+/* Toast messages (top-right) */
+#toast-container {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.toast {
+  background: rgba(40, 40, 40, 0.95);
+  color: #fff;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  font-size: 0.9rem;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.joueurs-wrapper {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.col-liste-generale {
+  flex: 1.3;
+  min-width: 320px;
+}
+
+.col-liste-tournoi {
+  flex: 1;
+  min-width: 260px;
+}
+
+.form-add-joueur {
+  display: flex;
+  align-items: center;
+}
+
+.input-search-joueur {
+  width: 400px; /* user requested */
+  max-width: 80%;
+}
+
+/* Conteneurs listes */
+#liste-joueurs,
+#liste-joueurs-tournoi {
+  border-radius: 4px;
+  background: #1e1e1e;
+  color: #f5f5f5;
+  padding: 0.4rem;
+  min-height: 2rem;
+}
+
+/* Liste générale */
+#liste-joueurs {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.6rem;
+  align-content: flex-start;
+  height: calc(100vh - 350px);
+  overflow-x: auto;
+}
+
+.joueur-general-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  width: 150px;
+}
+
+.joueur-item {
+  flex: 1;
+  cursor: pointer;
+  padding: 0.1rem 0.25rem;
+  border-radius: 3px;
+  background: transparent;
+  -webkit-user-select: none; /* prevent text selection during multi-select */
+  user-select: none;
+}
+
+.joueur-item:hover {
+  background: #424242;
+}
+
+.joueur-item.selected {
+  background: green;
+}
+
+/* Liste tournoi */
+#liste-joueurs-tournoi {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  height: calc(100vh - 350px);
+  overflow-x: auto;
+  gap: 0.2rem 1.2rem;
+}
+
+/* Prevent text selection in the tournoi list rows (avoid highlight during multi-select) */
+.joueur-tournoi-row, .joueur-tournoi-row .joueur-tournoi-nom {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.joueur-tournoi-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  width: 160px;
+  flex-shrink: 0;
+  /* enable smooth positional transforms for shuffle animation */
+  transition: transform 160ms cubic-bezier(.22,.9,.3,1), box-shadow 120ms ease;
+  will-change: transform;
+}
+
+/* subtle lift while highlighted during shuffle */
+.joueur-tournoi-row.shuffled-highlight { transform: translateZ(0) scale(1.03); box-shadow: 0 18px 40px rgba(3,169,244,0.12); }
+
+.joueur-tournoi-nom {
+  flex: 1;
+}
+
+.joueur-tournoi-num {
+  width: 1.2rem;
+  height: 1.6rem;
+  border-radius: 999px;
+  border: 1px solid #ffb300;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  background: #263238;
+}
+
+/* Header Tournoi & Morts */
+.tournoi-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between; /* center area will be centered, clear button at far right */
+  margin-bottom: 0.5rem;
+  flex-wrap: nowrap; /* keep on one line */
+  gap: 0.5rem;
+  padding: 0 0.4rem; /* match the list inner padding so the button aligns with list edge */
+}
+.tournoi-header .tournoi-header-center {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* centre le titre et le bouton Composer */
+  gap: 0.6rem;
+}
+.tournoi-header > h3 { text-align: left; flex: 0 0 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tournoi-header .header-compose-btn { white-space: nowrap; }
+
+/* Place nb-parties in the screen header (right side of redistribution banner) */
+.screen-header .header-nb-parties { margin-left: 1rem; display: inline-flex; align-items: center; }
+.screen-header .header-nb-parties .nb-parties-control { margin-left: 0.5rem; }
+
+
+
+#liste-morts {
+  border-radius: 4px;
+  background: #2b1d1d;
+  color: #ffb300;
+  padding: 0.4rem;
+  margin-top: 0.5rem;
+  min-height: 2rem;
+  display: none;
+  flex-direction: column; 
+  gap: 0.2rem;
+}
+
+/* Label pour les joueurs 'Mort' dans la saisie */
+.label-mort {
+  color: #ffb300;
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   SCREEN: PLAN DE TABLE / ROTATIONS
+   ========================================================================== */
+.plan-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.rotations-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  height: calc(100vh - 220px);
+  overflow-y: auto;
+  border: 1px solid #455a64; /* Optional visual boundary like the lists */
+  border-radius: 4px;
+  padding: 0.5rem;
+  background: #1e1e1e; /* Consistent background */
+}
+
+.rotation-block h3 {
+  margin-bottom: 0.25rem;
+  text-align: left; /* afficher "Manche N" aligné à gauche */
+}
+
+.rotation-tables {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+/* Carte Table */
+.tables-variables {
+  /* Defaults: change these to alter table visuals globally */
+  --table-width: 130px;
+  --table-height: 130px;
+  --table-border: 2px solid #a9c617;
+  --table-border-radius: 10px;
+  --table-bg-start: #16a34a;
+  --table-bg-end: #083327;
+  --table-text-color: #e5f9ed;
+  --table-shadow: 0 0 15px rgba(9,37,19,0.3);
+  --center-label-color: #04b636;
+  --center-label-font-size: 0.9rem;
+  --seat-font-size: 0.7rem;
+  --seat-padding: 0.1rem 0.2rem;
+}
+.table-card {
+  position: relative;
+  width: var(--table-width, 130px);
+  height: var(--table-height, 130px);
+  border: var(--table-border, 2px solid #a9c617);
+  border-radius: var(--table-border-radius, 10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at top, var(--table-bg-start, #16a34a) 0, var(--table-bg-end, #083327) 60%);
+  color: var(--table-text-color, #e5f9ed);
+  box-shadow: var(--table-shadow, 0 0 15px rgba(9,37,19,0.3));
+  margin-bottom: 2rem;
+}
+
+/* highlight variant removed - tables are displayed uniformly */
+
+.table-card-center-label {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-weight: bold;
+  font-size: var(--center-label-font-size, 0.9rem);
+  color: var(--center-label-color, #04b636);
+}
+
+/* Seat label styles for Exclu / Mort */
+.seat-mort { color: #FFD700; font-weight:700; }
+.exclu-inline { color: #aaa; font-style: italic; }
+
+/* Sièges */
+.table-seat {
+  position: absolute;
+  font-size: var(--seat-font-size, 0.7rem);
+  padding: var(--seat-padding, 0.1rem 0.2rem);
+  border-radius: 4px;
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table-seat-north { top: 4px; left: 50%; transform: translateX(-50%); }
+.table-seat-south { bottom: 4px; left: 50%; transform: translateX(-50%); }
+.table-seat-east  { right: 4px; top: 55%; transform: translateY(-50%); }
+.table-seat-west  { left: 4px; top: 45%; transform: translateY(-50%); }
+.table-seat-exemption {
+  top: 105%;
+  left: 30%;
+  transform: translateX(-50%);
+  color: var(--exemption-color, #fbbf24);
+  font-weight: bold;
+}
+
+.table-seat-exemption-2 {
+  top: 105%;
+  left: 70%;
+  transform: translateX(-50%);
+  color: var(--exemption-color, #fbbf24);
+  font-weight: bold;
+}
+
+/* Saisie mode: style localisé sans toucher au layout (évite superpositions) */
+/* (Reverted saisie-specific visual tweaks to avoid layout regressions) */
+
+
+
+
+/* FEUILLE DE TABLE styles removed (normal table-based saisie deprecated). 
+   Manual-entry helpers remain below for the current 'Saisie' UI. */
+
+/* Manual entry helpers (for <12 players manual mode) */
+.manual-note {
+  color: #ffd54f;
+  font-weight: 600;
+}
+.manual-manche-input {
+  width: 6ch;
+  text-align: center;
+  padding: 0.02rem 0.1rem; /* smaller vertical padding */
+  background: #1e272e;
+  border: 1px solid #455a64;
+  color: inherit;
+  border-radius: 3px;
+}
+.col-joueur { text-align: left; padding-right: 8px; }
+.manual-note.hidden { display: none }
+
+/* NOTE: If any remaining visual issues for the new 'Saisie' UI are found, adjust the selectors above (e.g., .manual-manche-input, .col-joueur) */
+
+/* Make cells in the saisie table more compact */
+.fast-table-card table td,
+.fast-table-card table th {
+  padding: 1px;
+  line-height: 1.2;
+}
+
+/* Force a fixed header row height for saisie tables so headers can hold two lines */
+#container-saisie .fast-table-card table thead th {
+  height: 44px; /* fixed height sufficient for two wrapped lines */
+  max-height: 44px;
+  white-space: normal; /* allow wrapping */
+  overflow: hidden;
+  line-height: 1.1;
+  padding: 4px 6px;
+  vertical-align: middle;
+}
+
+/* Colonne 'Partie' compacte : ne contient que le numéro et un entête '#' */
+.fast-table-card table th.col-partie,
+.fast-table-card table td.col-partie {
+  width: 2ch;
+  min-width: 2ch;
+  padding: 1px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   SCREENS: CLASSEMENT & COGNIN (Shared)
+   ========================================================================== */
+#screen-classement, #screen-cognin {
+  padding-bottom: 0.5rem;
+}
+
+/* Wrappers for Fixed Headers & Scrolling */
+.table-scroll-container,
+.soiree-scroll-wrapper,
+.recap-scroll-wrapper {
+  height: calc(100vh - 220px);
+  overflow: auto; /* Enable both X and Y scrolling */
+  border: 1px solid #455a64;
+  border-radius: 4px;
+  background: #1e1e1e;
+  display: block;
+}
+
+/* Theme panel styles */
+#theme-toggle {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #222;
+  color: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  z-index: 1200;
+}
+#theme-panel {
+  position: fixed;
+  right: 12px;
+  bottom: 68px;
+  width: 260px;
+  background: #121212;
+  color: #ddd;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+  z-index: 1200;
+}
+#theme-panel.hidden { display: none; }
+#theme-panel h3 { margin: 0 0 8px 0; font-size: 1rem; }
+.theme-row { margin-bottom: 8px; }
+.theme-row label { display:flex; justify-content:space-between; gap:8px; align-items:center; }
+.theme-row input[type="text"] { width: 110px; }
+.panel-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:8px }
+
+.recap-scroll-wrapper {
+  height: calc(100vh - 180px); /* A bit more space if possible */
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.classement-layout {
+  display: flex;
+  align-items: flex-start;
+  min-width: 100%;
+}
+
+/* -- Tableau fixe (Gauche) -- */
+#table-classement-fixe,
+#table-cognin-fixe {
+  width: auto; /* Allow auto width for name */
+  min-width: 200px; /* Minimal width to ensure it's not too small */
+  flex-shrink: 0;
+  table-layout: auto; /* Standard table layout, adapts to content */
+  /* background supprimé ici pour être géré au niveau des TR/TD pour garantir l'opacité */
+  border-right: 2px solid #546e7a;
+  position: sticky;
+  left: 0;
+  z-index: 20;
+}
+
+/* Force solid background on fixed table rows to prevent transparency leak */
+#table-classement-fixe tbody tr,
+#table-cognin-fixe tbody tr {
+    background-color: #1e1e1e;
+}
+#table-classement-fixe tbody tr:nth-child(even),
+#table-cognin-fixe tbody tr:nth-child(even) {
+    background-color: #252525; /* Solid version of the semi-transparent hover */
+}
+
+/* Force solid background on these cells specifically */
+#table-classement-fixe td,
+#table-cognin-fixe td {
+    background-color: inherit;
+    position: relative;
+    z-index: 20;
+}
+
+#table-classement-dates,
+#table-cognin-dates {
+  width: auto;
+  table-layout: fixed;
+}
+
+.classement-scroll-wrapper {
+  flex: 1;
+  /* overflow-x: auto;  <-- Supprimé pour laisser le scroll au conteneur parent */
+  display: block; /* Modifié de flex à block pour comportement standard */
+}
+
+/* --- Headers Sticky Top --- */
+#table-soiree th,
+/* Force separate borders to fix sticky header transparency artifacts */
+#table-recap,
+#table-soiree,
+#table-classement-fixe,
+#table-classement-dates,
+#table-cognin-fixe,
+#table-cognin-dates {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+#table-recap th,
+#table-classement-fixe th,
+#table-classement-dates th,
+#table-cognin-fixe th,
+#table-cognin-dates th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #263238; /* Opaque header bg */
+  border-bottom: 2px solid #455a64; /* Back to standard border with border-collapse: separate */
+  box-shadow: none;
+  height: 60px; /* Increased height to accommodate date + trash icon */
+  vertical-align: middle;
+}
+
+.header-date-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  line-height: 1.1;
+}
+
+.header-date-cell .btn-del-date,
+.header-date-cell .btn-del-manche {
+  margin: 0;
+}
+
+/* Fix z-index for the top-left intersection (Fixed Table Headers) */
+#table-classement-fixe th,
+#table-cognin-fixe th {
+  z-index: 50; /* Much Higher than regular headers (10) and tables (20) */
+  background-color: #263238; /* Ensure opaque background */
+  /* Only vertical shadow for the right side separation */
+  box-shadow: 2px 0 0 #546e7a; 
+}
+
+/* --- Column Widths --- */
+
+/* Fixed Cells and Soiree Table */
+#table-classement-fixe th, #table-classement-fixe td,
+#table-cognin-fixe th, #table-cognin-fixe td,
+#table-classement-dates th, #table-classement-dates td,
+#table-cognin-dates th, #table-cognin-dates td,
+#table-soiree th, #table-soiree td {
+  white-space: nowrap;
+  padding: 0.2rem 0.3rem; 
+  height: 30px; /* Data rows height */
+  border-bottom: 1px solid #424242;
+  border-right: 1px solid #424242;
+}
+
+/* Specific overwrite for headers height to allow 2 lines */
+#table-classement-fixe th,
+#table-cognin-fixe th,
+#table-classement-dates th,
+#table-cognin-dates th,
+#table-soiree th {
+  height: 60px;
+}
+
+/* Rang */
+#table-classement-fixe th:nth-child(1),
+#table-classement-fixe td:nth-child(1),
+#table-cognin-fixe th:nth-child(1),
+#table-cognin-fixe td:nth-child(1) {
+  width: 35px;
+  text-align: center;
+}
+
+/* Joueur (Variable width) */
+#table-classement-fixe th:nth-child(2),
+#table-classement-fixe td:nth-child(2),
+#table-cognin-fixe th:nth-child(2),
+#table-cognin-fixe td:nth-child(2) {
+  min-width: 80px;
+  /* No fixed width here, so it stretches */
+  text-align: left;
+}
+
+/* Total */
+#table-classement-fixe th:nth-child(3),
+#table-classement-fixe td:nth-child(3),
+#table-cognin-fixe th:nth-child(3),
+#table-cognin-fixe td:nth-child(3) {
+  width: 60px;
+  text-align: center;
+  color: #ffb300;
+  font-weight: bold;
+}
+
+/* Prime (Classement only) / Prime Cognin */
+#table-classement-fixe th:nth-child(4),
+#table-classement-fixe td:nth-child(4),
+#table-cognin-fixe th:nth-child(3),
+#table-cognin-fixe td:nth-child(3) {
+  width: 60px;
+  text-align: center;
+}
+
+/* Total (Cognin needs adjustment as it is now 4th) */
+#table-cognin-fixe th:nth-child(4),
+#table-cognin-fixe td:nth-child(4) {
+  width: 60px;
+  text-align: center;
+  color: #4caf50;
+  font-weight: bold;
+}
+
+/* Dates */
+#table-classement-dates th,
+#table-classement-dates td,
+#table-cognin-dates th,
+#table-cognin-dates td {
+  width: 50px;
+  min-width: 50px;
+  text-align: center;
+}
+
+/* Soiree Table Specifics: align with classement style (sticky header, borders, highlighted total) */
+
+#table-soiree {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: auto; /* shrink to content so columns sit next to names */
+  background: #1e1e1e;
+  --soiree-name-col: 80px; /* default */
+}
+
+/* Movement label + inline comment */
+.movement-label {
+  font-weight: 600;
+  color: #fff;
+  margin-right: 6px;
+}
+.movement-comment {
+  display: inline-block;
+  margin-left: 8px;
+  color: #bdbdbd;
+  font-size: 0.85rem; /* smaller font */
+  line-height: 1.1;
+  max-width: 62ch;
+  vertical-align: middle;
+  white-space: normal; /* allow wrapping if too long */
+}
+
+#table-soiree th,
+#table-soiree td,
+#table-classement-fixe th, #table-classement-fixe td,
+#table-classement-dates th, #table-classement-dates td,
+#table-cognin-fixe th, #table-cognin-fixe td,
+#table-cognin-dates th, #table-cognin-dates td,
+#table-recap th, #table-recap td {
+  text-align: center;
+  padding: 0.2rem 0.3rem;
+  border-bottom: 1px solid #424242;
+  border-right: 1px solid #424242;
+  font-size: 0.85rem;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+}
+
+/* Inputs inside tables should inherit font and sizing */
+#table-soiree input.manual-manche-input,
+.table-recap-tournoi input,
+#table-classement-fixe input,
+#table-cognin-fixe input {
+  font-family: inherit;
+  font-size: inherit;
+  padding: 4px 6px;
+  width: 100%;
+  box-sizing: border-box;
+  background: transparent;
+  color: inherit;
+  border: none; /* Remove input borders for score cells */
+  border-radius: 0;
+  outline: none;
+  text-align: center;
+}
+
+/* Ensure name column is left aligned and consistent across tables */
+#table-soiree th.first-col, #table-soiree td.first-col,
+#table-classement-fixe th.first-col, #table-classement-fixe td.first-col,
+.table-recap-tournoi .col-joueur {
+  text-align: left;
+  padding-right: 8px;
+}
+
+/* Rank (white) and total (yellow) — no special background */
+#table-soiree td.col-rang, #thead-soiree th.col-rang-header,
+.table-recap-tournoi .col-rang, #table-classement-fixe td.col-rang, #table-classement-fixe th.col-rang-header {
+  color: #ffffff;
+  text-align: center;
+  width: 2.6ch;
+  min-width: 2.6ch;
+  padding: 6px 4px;
+  white-space: nowrap;
+  display: table-cell;
+  vertical-align: middle;
+}
+/* Total Soirée: yellow text, no special background */
+#table-soiree td.col-total, #thead-soiree th.col-total-header,
+.table-recap-tournoi .col-total, #table-classement-fixe td.col-total {
+  color: #ffb300;
+}
+
+/* Make header two-line appearance consistent */
+.header-date-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.08rem;
+  line-height: 1.05;
+}
+
+/* Trash and small buttons consistent look */
+.btn-trash, .btn-del-manche, .btn-del-date {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 0 6px;
+}
+
+/* Small tweak: ensure tables use consistent cell padding and font-weight */
+/* Make texts non-bold across tables (headers and cells) */
+#table-soiree th, #table-recap th, #table-classement-fixe th, #table-cognin-fixe th,
+#table-soiree td, #table-recap td, #table-classement-fixe td, #table-cognin-fixe td {
+  font-weight: 400;
+}
+
+#table-soiree th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #263238; /* same as classement headers */
+  border-bottom: 2px solid #455a64;
+  height: 60px;
+  vertical-align: middle;
+}
+
+#table-soiree thead .header-date-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Ensure first column (player) is left aligned and wide enough */
+/* Player name column: use .col-joueur explicitly (not first-child) */
+.col-joueur {
+  text-align: left;
+  padding-right: 8px;
+  white-space: nowrap;
+  color: #ffffff; /* Player names in white */
+  -webkit-user-select: none;
+  user-select: none; /* make non-selectable */
+}
+
+/* Ensure first column sizing no longer assumes player is first child */
+#table-soiree th:first-child, #table-soiree td:first-child { width: auto; }
+
+/* Total column highlighted via .col-total */
+.col-total {
+  color: #ffb300; /* yellow text */
+  font-weight: 400;
+  width: 60px;
+  min-width: 60px;
+  text-align: center;
+}
+
+/* Manche columns sizing to match classement/date columns */
+#table-soiree th:nth-child(n+3),
+#table-soiree td:nth-child(n+3) {
+  width: 50px;
+  min-width: 50px;
+  text-align: center;
+}
+
+
+/* ==========================================================================
+   SCREEN: RECAPITULATIF (DETAIL)
+   ========================================================================== */
+.table-recap-tournoi {
+  margin-top: 0.5rem;
+  width: auto;
+  /* Suppr min-width pour que le tableau soit compact */
+  border-collapse: collapse;
+}
+
+.table-recap-tournoi th,
+.table-recap-tournoi td {
+  white-space: nowrap;
+  font-family: inherit;
+  font-size: 0.82rem;
+  color: #f5f5f5;
+  padding: 0.25rem 0.4rem;
+  text-align: center;
+  /* Reset overflow/ellipsis */
+  overflow: visible;
+  text-overflow: clip;
+  box-sizing: border-box; /* Force le padding dans la largeur */
+}
+
+/* Col 1: Rang */
+.table-recap-tournoi .col-rang {
+  width: 40px;
+  min-width: 40px;
+  max-width: 40px;
+}
+
+/* Col 2: Joueur */
+.table-recap-tournoi .col-joueur {
+  width: 1px; /* Astuce pour fit-content strict */
+  white-space: nowrap;
+  padding-right: 20px;
+  text-align: left;
+}
+
+/* Col 3: Total (Jaune) */
+.table-recap-tournoi .col-total {
+  width: 72px;
+  min-width: 72px;
+  max-width: 72px;
+  color: #ffb300;
+  font-weight: bold;
+}
+
+/* Col: Prime */
+.table-recap-tournoi .col-prime {
+  width: 60px;
+  min-width: 60px;
+  max-width: 60px;
+  color: #4caf50;
+  /* ensure gain column style (placed at end) */
+}
+
+/* Recap redistributions banner */
+.recap-redistrib-banner {
+  margin: 8px 0 12px 0;
+  padding: 8px 12px;
+  background: rgba(255, 215, 0, 0.08);
+  border-left: 4px solid #ffb300;
+  color: #fff7c0;
+  font-size: 0.95rem;
+  border-radius: 4px;
+}
+
+/* Small inline banner variant for Joueurs / Tirage header */
+.feuille-redistrib-banner-small {
+  display: inline-block;
+  margin-left: 0.8rem;
+  padding: 4px 8px;
+  background: rgba(255, 215, 0, 0.06);
+  border-left: 3px solid #ffb300;
+  color: #fff7c0;
+  font-size: 0.9rem;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+
+/* Lucky draw highlight — higher contrast + glow */
+.lucky-highlight {
+  background: linear-gradient(90deg, rgba(3,169,244,0.18), rgba(255,235,59,0.12));
+  box-shadow: 0 10px 30px rgba(3,169,244,0.28) inset, 0 20px 40px rgba(3,169,244,0.12);
+  transform-origin: center center;
+  transition: background 120ms cubic-bezier(.2,.9,.2,1), transform 140ms cubic-bezier(.2,.9,.2,1), box-shadow 140ms cubic-bezier(.2,.9,.2,1);
+  z-index: 5;
+  border-radius: 6px;
+  outline: 2px solid rgba(3,169,244,0.12);
+}
+
+
+
+/* Stronger pulse and glow for the final winner */
+.lucky-winner-pulse {
+  animation: pulseWinner 1400ms cubic-bezier(.2,.9,.2,1) 4;
+  box-shadow: 0 24px 60px rgba(3,169,244,0.28);
+  transform: translateZ(0);
+}
+
+@keyframes pulseWinner {
+  0% { transform: scale(1); box-shadow: 0 0 0 rgba(3,169,244,0); }
+  25% { transform: scale(1.05); box-shadow: 0 20px 60px rgba(3,169,244,0.28), 0 0 30px rgba(255,235,59,0.08); }
+  50% { transform: scale(1.03); box-shadow: 0 28px 80px rgba(3,169,244,0.34), 0 0 36px rgba(255,235,59,0.1); }
+  75% { transform: scale(1.04); box-shadow: 0 20px 60px rgba(3,169,244,0.28); }
+  100% { transform: scale(1); box-shadow: 0 0 0 rgba(3,169,244,0); }
+}
+
+/* Dim non-eligible rows while lucky draw is running to increase contrast */
+tbody.lucky-active { position: relative; }
+tbody.lucky-active::after { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,0.28); pointer-events: none; border-radius: 6px; transition: background 220ms ease-in-out; }
+tbody.lucky-active tr { opacity: 0.18; filter: grayscale(70%) brightness(0.6); transform: translateZ(0); transition: opacity 220ms ease-in-out, filter 220ms ease-in-out; }
+tbody.lucky-active tr.already-rewarded { opacity: 0.12; filter: grayscale(85%) brightness(0.55); }
+tbody.lucky-active tr.lucky-highlight { opacity: 1; filter: none; transform: translateZ(0) scale(1.06); box-shadow: 0 30px 60px rgba(3,169,244,0.22); }
+
+/* Gain cell styling (more contrast for lucky/rewarded) */
+.col-gain { text-align: center; min-width: 80px; }
+.col-gain .gain-regular { color: #ffd54f; }
+.col-gain .gain-lucky { color: #00e5ff; font-weight: 800; text-shadow: 0 2px 8px rgba(3,169,244,0.25); }
+.col-gain .gain-rewarded { color: #76ff03; font-weight: 800; text-shadow: 0 2px 8px rgba(76,175,80,0.18); }
+
+
+/* Col 4+: Manches */
+.table-recap-tournoi .col-manche {
+  width: 56px;
+  min-width: 56px;
+  max-width: 56px;
+  color: #f5f5f5;
+  font-weight: normal;
+}
+
+@media print {
+  /* === RESET GLOBAL === */
+  :root, html, body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Cacher tout sauf main */
+  body > *:not(main) {
+    display: none !important;
+  }
+
+  /* Dans main, cacher tout sauf #print-container */
+  main > *:not(#print-container) {
+    display: none !important;
+  }
+
+  main {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    padding-top: 0 !important;
+    background: transparent !important;
+    width: 100% !important;
+  }
+
+  /* === PRINT CONTAINER === */
+  #print-container {
+    display: block !important;
+    position: relative !important;
+    width: 100% !important;
+    background-color: white !important;
+    color: black !important;
+  }
+
+  .print-page-break {
+    page-break-before: always;
+    margin-top: 1rem;
+  }
+
+  /* === TABLEAUX === */
+  #print-container table,
+  .print-split-table {
+    width: auto !important;
+    border-collapse: collapse !important;
+    margin-top: 10px !important;
+    font-size: 10pt !important;
+    color: black !important;
+    page-break-inside: auto;
+    margin-bottom: 20px;
+  }
+
+  #print-container th,
+  #print-container td,
+  .print-split-table th,
+  .print-split-table td {
+    border: 1px solid #000 !important;
+    padding: 3px 6px !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    color: black !important;
+    background: white !important;
+  }
+
+  #print-container th,
+  .print-split-table th {
+    background-color: #eeeeee !important;
+    font-weight: bold !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Colonnes spécifiques */
+  #print-container .col-joueur,
+  .print-split-table .col-nom {
+    text-align: left !important;
+    padding-left: 5px !important;
+    font-weight: bold;
+    width: auto !important;
+    min-width: 150px;
+    white-space: nowrap;
+    padding-right: 10px;
+  }
+
+  #print-container .col-rang { width: 30px !important; }
+  #print-container .col-manche { width: 40px !important; }
+  #print-container .col-prime,
+  #print-container .col-total { width: auto !important; min-width: 60px; }
+}
+
+/* Container used ONLY for printing — hidden on screen */
+#print-container {
+  display: none;
+}
+
+/* Manual mode: Rank and Total column styles */
+#tbody-soiree td.col-rang, #thead-soiree th.col-rang-header {
+  text-align: center;
+  width: 3.2ch;
+}
+#tbody-soiree td.col-rang, #tbody-soiree td.col-total { padding: 6px 8px; }
+
+
+/* ==========================================================================
+   MODAL: Composition (overlay + card) + backup modal
+   ========================================================================== */
+/* Composition modal overlay (guarantee visible above Plan) */
+/* --- Custom dialog (replaces native alert/confirm on tablet) --- */
+.custom-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.65);
+  z-index: 10000;
+  padding: 1rem;
+}
+.custom-dialog-overlay.hidden { display: none; }
+
+.custom-dialog-card {
+  background: linear-gradient(180deg,#0b1220 0%,#021c45 100%);
+  border-radius: 12px;
+  color: #e6eef6;
+  box-shadow: 0 30px 80px rgba(2,6,23,0.75), 0 6px 18px rgba(0,0,0,0.5);
+  padding: 1.5rem 1.5rem 1.2rem;
+  border: 1px solid rgba(255,255,255,0.06);
+  width: min(480px, 90vw);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.custom-dialog-message {
+  font-size: 1.08rem;
+  line-height: 1.5;
+  margin-bottom: 1.2rem;
+  white-space: pre-line;
+  word-break: break-word;
+}
+
+.custom-dialog-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  justify-content: flex-end;
+}
+
+.custom-dialog-buttons button {
+  min-width: 90px;
+  padding: 0.55rem 1.1rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s;
+}
+
+.custom-dialog-btn-primary {
+  background: #3b82f6;
+  color: #fff;
+}
+.custom-dialog-btn-primary:hover,
+.custom-dialog-btn-primary:active {
+  background: #2563eb;
+}
+
+.custom-dialog-btn-secondary {
+  background: rgba(255,255,255,0.08);
+  color: #cbd5e1;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+}
+.custom-dialog-btn-secondary:hover,
+.custom-dialog-btn-secondary:active {
+  background: rgba(255,255,255,0.15);
+}
+
+.custom-dialog-btn-danger {
+  background: #ef4444;
+  color: #fff;
+}
+.custom-dialog-btn-danger:hover,
+.custom-dialog-btn-danger:active {
+  background: #dc2626;
+}
+
+/* Scrollable choice variant */
+.custom-dialog-buttons.vertical {
+  flex-direction: column;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.custom-dialog-buttons.vertical button {
+  width: 100%;
+  text-align: left;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end; /* align modal to the very right of the screen */
+  background: rgba(0,0,0,0.62);
+  z-index: 9000; /* ensure above rotations */
+  padding: 1rem 12px 1rem 1rem; /* small right gutter so modal isn't flush on small screens */
+}
+
+.modal-overlay.hidden { display: none; }
+
+.modal-card {
+  background: linear-gradient(180deg,#0b1220 0,#021c45 100%);
+  border-radius: 10px;
+  width: min(650px, 86%); /* reduced width */
+  max-width: 860px;
+  margin-right: 12px; /* ensure it's placed at the right edge */
+  color: #e6eef6;
+  box-shadow: 0 30px 80px rgba(2,6,23,0.75), 0 6px 18px rgba(0,0,0,0.5);
+  padding: 1.1rem 1.25rem;
+  border: 1px solid rgba(255,255,255,0.03);
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+}
+
+.composition-grid {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+/* Fix player-list sizes so they do not resize */
+.comp-list {
+  background: rgba(255,255,255,0.012);
+  border: 1px solid rgba(255,255,255,0.02);
+  border-radius: 6px;
+  padding: 8px;
+  width: 300px;    /* fixed width */
+  height: 360px;   /* fixed height */
+  overflow-y: auto;/* allow scrolling inside */
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.comp-item {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: transparent;
+  color: #dbeafe;
+  border: 1px solid rgba(255,255,255,0.02);
+  cursor: pointer;
+  -webkit-user-select: none; /* Safari/iOS support */
+  user-select: none;
+}
+.comp-item.mort { color: #9aa6b2; font-style: italic; }
+.comp-item.placed { background: rgba(34,197,94,0.04); border-color: rgba(34,197,94,0.12); }
+
+/* Mort row styling in the manual scores table */
+tr.is-mort .col-joueur {
+  color: #FFD700; /* yellow-gold */
+  font-weight: 700;
+}
+
+/* Disabled inputs for Mort rows: red strike-through and not-allowed cursor */
+tr.is-mort input.manual-manche-input.input-mort-disabled {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-color: #e11d48; /* red-600 */
+  color: #9a1f2d; /* darker red for value (if any) */
+  border-color: rgba(225,29,72,0.3);
+  background-color: rgba(255,255,255,0.02);
+  cursor: not-allowed;
+  opacity: 0.95;
+}
+
+tr.is-mort input.manual-manche-input.input-mort-disabled::placeholder {
+  text-decoration: line-through;
+  color: rgba(225,29,72,0.6);
+}
+
+.modal-actions { display:flex; gap:0.5rem; align-items:center; margin-top:0.75rem }
+.modal-actions .muted { color: #9aa6b2; font-size:0.85rem }
+
+/* Fallback: make sure hidden class still works for modal */
+#composition-overlay.hidden { display: none; }
+
+/* --- Backup modal (existing) --- */
+#modal-backup {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.8);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#modal-backup.hidden {
+  display: none;
+}
+
+.modal-content-backup {
+  background: #1f2933;
+  padding: 2rem;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-content-backup h3 {
+  margin-top: 0;
+  color: #ffb300;
+}
+
+#list-backups-container {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+  overflow-y: auto;
+  flex: 1;
+  border: 1px solid #444;
+  border-radius: 4px;
+}
+
+#list-backups-container li {
+  padding: 0.75rem;
+  border-bottom: 1px solid #333;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#list-backups-container li:hover {
+  background-color: #3e566b;
+}
+
+#list-backups-container li:last-child {
+  border-bottom: none;
+}
+
+#list-backups-container .backup-name {
+  font-weight: bold;
+}
+
+#list-backups-container .backup-date {
+  font-size: 0.85em;
+  color: #aaa;
+}
+
+/* Correction inline styles pour Input Manches */
+.input-manches-wrapper {
+  margin-right: 15px;
+}
+#nb-parties,
+#nb-parties-par-manche {
+  width: 4.2rem;
+  text-align: center;
+  background: transparent; /* now display-only */
+  border: none;
+  color: inherit;
+  cursor: default; /* not directly editable */
+  -webkit-appearance: none; /* ensure no platform decoration (Safari) */
+  appearance: none; /* standard */
+  -webkit-user-select: none; /* Safari */
+  user-select: none; /* prevent selecting the number */
+  caret-color: transparent; /* hide caret */
+  margin-right: 0; /* ensure no extra spacing */
+}
+#nb-parties:focus,
+#nb-parties-par-manche:focus { outline: none; box-shadow: none; }
+.btn-small {
+  background: transparent; /* no visible background */
+  border: none; /* no border */
+  color: #ffffff; /* Flèches blanches */
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: 0;
+  line-height: 1;
+}
+
+.btn-small:hover { background: rgba(255,255,255,0.02); }
+
+.btn-small[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Clean up: restore native spinners and default styles for number inputs */
+#nb-parties,
+#nb-parties-par-manche { width: 2.2rem; text-align: center } /* kept for legacy but spacing tightened above */
+
+/* ===== DEBUG PANEL (temporary) ===== */
+#debug-panel {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  background: rgba(2,6,23,0.78);
+  color: #e6eef6;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.2;
+  max-width: 380px;
+  max-height: 220px;
+  overflow: auto;
+  z-index: 99999;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+  border: 1px solid rgba(255,255,255,0.02);
+}
+#debug-panel .debug-line { margin-bottom: 6px; opacity: 0.95 }
+#debug-panel .debug-info { color: #bde0ff }
+#debug-panel .debug-warn { color: #ffd88a }
+#debug-panel .debug-err { color: #ffb3b3 }
+
+/* Validation bubble (score non-divisible) */
+.validation-bubble {
+  position: fixed;
+  z-index: 100000;
+  background: linear-gradient(135deg, #ff4444 0%, #cc0033 100%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(255, 0, 50, 0.45), 0 0 0 1px rgba(255,255,255,0.1);
+  pointer-events: none;
+  white-space: nowrap;
+  animation: bubbleIn 0.25s ease-out;
+  letter-spacing: 0.2px;
+}
+.validation-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+}
+.validation-bubble.arrow-bottom::after {
+  top: 100%;
+  border-top-color: #cc0033;
+}
+.validation-bubble.arrow-top::after {
+  bottom: 100%;
+  border-bottom-color: #ff4444;
+}
+.validation-bubble.fade-out {
+  animation: bubbleOut 0.3s ease-in forwards;
+}
+@keyframes bubbleIn {
+  0% { opacity: 0; transform: scale(0.85) translateY(4px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes bubbleOut {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.85) translateY(4px); }
+}
+#debug-panel::-webkit-scrollbar { height: 6px; width: 6px }
+#debug-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.04); border-radius: 6px }
+
+/* ── Minuteur ── */
+.timer-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  min-height: 60vh;
+}
+.timer-display {
+  font-size: clamp(80px, 18vw, 200px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #e0e0e0;
+  text-align: center;
+  letter-spacing: 4px;
+  margin-bottom: 30px;
+  transition: color 0.3s;
+}
+.timer-display.timer-done {
+  color: #ff4444;
+  animation: timerPulse 0.5s ease-in-out 3;
+}
+@keyframes timerPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+nav button.timer-nav-flash {
+  animation: navFlash 0.6s ease-in-out infinite;
+}
+@keyframes navFlash {
+  0%, 100% { background-color: inherit; color: inherit; }
+  50% { background-color: #ff4444; color: #fff; }
+}
+.timer-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.timer-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.timer-input-row label {
+  font-size: 14px;
+  color: #bbb;
+}
+.timer-input-row input[type=number] {
+  width: 80px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #555;
+  background: #2a2a2a;
+  color: #eee;
+  font-size: 16px;
+  text-align: center;
+}
+.timer-quick-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.timer-quick-row span {
+  font-size: 13px;
+  color: #999;
+}
+.btn-quick {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid #555;
+  background: #333;
+  color: #ccc;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s;
+}
+.btn-quick:hover { background: #444; color: #fff; }
+.timer-quick-below {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.timer-quick-below label {
+  font-size: 13px;
+  color: #999;
+}
+.timer-quick-below input[type=number] {
+  width: 90px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #555;
+  background: #2a2a2a;
+  color: #eee;
+  font-size: 14px;
+  text-align: center;
+}
+.timer-sound-toggle {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #aaa;
+}
+.timer-sound-toggle input[type=checkbox] {
+  margin-right: 4px;
+}
+
+/* ── Écran Aide ── */
+.aide-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px 30px 40px;
+  color: #e0e0e0;
+  line-height: 1.6;
+}
+.aide-container h2 {
+  text-align: center;
+  margin-bottom: 24px;
+  color: #fff;
+  font-size: 1.5em;
+}
+.aide-section {
+  background: rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-bottom: 14px;
+}
+.aide-section h3 {
+  margin: 0 0 8px;
+  color: #ffd54f;
+  font-size: 1.1em;
+}
+.aide-section ol,
+.aide-section ul {
+  margin: 6px 0 0 18px;
+  padding: 0;
+}
+.aide-section li {
+  margin-bottom: 4px;
+}
+.aide-section p {
+  margin: 4px 0;
+}
+.aide-section code {
+  background: rgba(255,255,255,0.12);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+.aide-footer {
+  border-top: 1px solid rgba(255,255,255,0.15);
+  padding-top: 14px;
+  margin-top: 20px;
+}
+
+/* ── Bouton coche verte Valider manche ── */
+.btn-validate-check {
+  background: none;
+  border: none;
+  color: #4caf50;
+  font-size: 1.1em;
+  cursor: pointer;
+  margin-left: 6px;
+  padding: 2px 4px;
+  transition: color 0.15s;
+}
+.btn-validate-check:hover {
+  color: #81c784;
+}
+/* ================================ */
