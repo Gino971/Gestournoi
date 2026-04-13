@@ -3595,6 +3595,18 @@ async function renderSaisieParTable () {
 
         const tableSize = tData.players.length
 
+        // Determine whether this particular partie (manche) is considered
+        // validated. We treat a manche as validated when any of the following
+        // holds:
+        // - the model already contains `part.locked` (legacy)
+        // - the validated snapshot for this rotation contains fully-filled scores
+        // - the persisted `scores_par_table` entry for this table contains
+        //   fully-filled scores for this manche
+        const persistedTablesForRender = tablesData || []
+        const snapshotTablesForRender = validatedSnapshot || []
+        const findPersistedEntry = (tblId) => (persistedTablesForRender || []).find(x => Number(x.table) === Number(tblId))
+        const findSnapshotEntry = (tblId) => (snapshotTablesForRender || []).find(x => Number(x.table) === Number(tblId))
+
         // Helper: recompute and refresh Totaux display from `tData.parties`
         const updateTotalsDisplay = () => {
           try {
@@ -3698,6 +3710,20 @@ async function renderSaisieParTable () {
         const inExcluMode = (typeof getMode === 'function' && getMode() === 'exclu')
 
         part.scores.forEach((cellVal, colIdx) => {
+          const snapshotEntry = findSnapshotEntry(tData.table)
+          const persistedEntry = findPersistedEntry(tData.table)
+          let partIsValidated = false
+          try {
+            if (part && part.locked) partIsValidated = true
+            if (!partIsValidated && snapshotEntry && Array.isArray(snapshotEntry.parties) && snapshotEntry.parties[partIdx]) {
+              const sc = snapshotEntry.parties[partIdx].scores || []
+              if (sc.length && sc.every(v => v !== null && v !== undefined)) partIsValidated = true
+            }
+            if (!partIsValidated && persistedEntry && Array.isArray(persistedEntry.parties) && persistedEntry.parties[partIdx]) {
+              const sc2 = persistedEntry.parties[partIdx].scores || []
+              if (sc2.length && sc2.every(v => v !== null && v !== undefined)) partIsValidated = true
+            }
+          } catch (_e) { partIsValidated = !!(part && part.locked) }
           const td = document.createElement('td')
           td.style.padding = '1px'
           td.style.textAlign = 'center'
@@ -3729,7 +3755,7 @@ async function renderSaisieParTable () {
             // locked flag indicates the manche has been validated; keep it frozen
             // but only enforce read-only here when in exclu mode. Normal mode
             // should still allow corrections.
-            if (part && part.locked && inExcluMode) {
+            if (partIsValidated && inExcluMode) {
               inp.readOnly = true
             }
           
@@ -3753,7 +3779,7 @@ async function renderSaisieParTable () {
 
           // Simplified exclu rule: in 'exclu' mode any already-validated
           // manche (`part.locked`) is not editable. Show an alert on focus.
-          if (inExcluMode && part && part.locked) {
+          if (inExcluMode && partIsValidated) {
             inp.readOnly = true
             inp.disabled = true
             inp.addEventListener('focus', () => {
@@ -3765,7 +3791,7 @@ async function renderSaisieParTable () {
           // When the value changes, clear other cells in the row then compute
           // allow changes when NOT in validated read-only view (i.e. either
           // normal mode or validatedEditMode === true)
-          if (!(isValidatedManche && !validatedEditMode) && !(inExcluMode && part && part.locked)) {
+          if (!(isValidatedManche && !validatedEditMode) && !(inExcluMode && partIsValidated)) {
           inp.onchange = async (ev) => {
             const rowInputs = Array.from(tr.querySelectorAll('input'))
             rowInputs.forEach((ri) => {
