@@ -1820,51 +1820,6 @@ function setMode (m) {
   // ensure next render treats rotation as changed so we wipe all scores
   _lastRenderedRotation = null
   try { renderSaisie() } catch (_e) {}
-<<<<<<< HEAD
-
-  // If switching out of 'exclu' mode, scrub any persisted 'locked' flags so
-  // validated manches remain editable in normal modes. This clears both the
-  // per-table persistence and validated snapshot storage.
-  try {
-    if (m !== 'exclu') {
-      // Clean scores_par_table persistence
-      try {
-        const persisted = await getScoresParTable() || []
-        const cleaned = (persisted || []).map(t => {
-          if (t && Array.isArray(t.parties)) {
-            t.parties = t.parties.map(p => {
-              if (p && p.locked) {
-                const np = Object.assign({}, p)
-                delete np.locked
-                return np
-              }
-              return p
-            })
-          }
-          return t
-        })
-        await setScoresParTable(cleaned)
-      } catch (_e) { /* ignore persistence errors */ }
-
-      // Clean validated_manches_data in localStorage
-      try {
-        const raw = localStorage.getItem('validated_manches_data') || '{}'
-        const obj = JSON.parse(raw || '{}')
-        Object.keys(obj || {}).forEach((k) => {
-          const tables = obj[k] || []
-          tables.forEach(t => {
-            if (t && Array.isArray(t.parties)) {
-              t.parties.forEach(p => { if (p && p.locked) delete p.locked })
-            }
-          })
-          obj[k] = tables
-        })
-        try { localStorage.setItem('validated_manches_data', JSON.stringify(obj)) } catch (_e) {}
-      } catch (_e) { /* ignore localStorage errors */ }
-    }
-  } catch (_e) { /* ignore overall cleanup errors */ }
-=======
->>>>>>> 4cb1fbe (Revert local edits: restore previous validated-manche locking behavior (local))
 }
 function getMode () {
   try {
