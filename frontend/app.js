@@ -3432,6 +3432,54 @@ async function renderSaisieParTable () {
     }
     const isValidatedMancheView = isValidatedManche && !validatedEditMode
 
+    // Afficher un bandeau informatif si on est en mode 'exclu' et qu'il existe
+    // au moins une manche validée (soit dans les snapshots, soit dans les
+    // tables persistées). Le bandeau avertit que la modification est
+    // impossible en mode exclu.
+    try {
+      const inExcluModeTop = (typeof getMode === 'function' && getMode() === 'exclu')
+      if (inExcluModeTop) {
+        let hasValidated = false
+        try {
+          // vérifie les tables persistées
+          const persisted = tablesData || []
+          for (const t of persisted) {
+            if (t && Array.isArray(t.parties)) {
+              for (const p of t.parties) {
+                const sc = (p && p.scores) || []
+                if (sc.length && sc.every(v => v !== null && v !== undefined)) { hasValidated = true; break }
+              }
+            }
+            if (hasValidated) break
+          }
+        } catch (_e) { /* ignore */ }
+        if (!hasValidated && validatedSnapshot) {
+          try {
+            for (const t of (validatedSnapshot || [])) {
+              if (t && Array.isArray(t.parties)) {
+                for (const p of t.parties) {
+                  const sc = (p && p.scores) || []
+                  if (sc.length && sc.every(v => v !== null && v !== undefined)) { hasValidated = true; break }
+                }
+              }
+              if (hasValidated) break
+            }
+          } catch (_e) { /* ignore */ }
+        }
+        if (hasValidated) {
+          const banner = document.createElement('div')
+          banner.className = 'exclu-validated-banner'
+          banner.textContent = "Modification de manche validée impossible en mode exclu"
+          banner.style.padding = '8px 12px'
+          banner.style.background = '#8b0000'
+          banner.style.color = '#fff'
+          banner.style.marginBottom = '8px'
+          banner.style.borderRadius = '4px'
+          try { containerSaisie.appendChild(banner) } catch (_e) {}
+        }
+      }
+    } catch (_e) { /* ignore */ }
+
     // if the rotation key changed since last render, wipe every table completely
     // (similar to clicking the trash icon) so old scores cannot leak into a
     // different composition. this handles mode switches and manual rotation
