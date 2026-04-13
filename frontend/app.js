@@ -3432,22 +3432,28 @@ async function renderSaisieParTable () {
     }
     const isValidatedMancheView = isValidatedManche && !validatedEditMode
 
+    // Récupérer les exclus (liste par manche) pour cette rotation
+    let exclusArr = []
+    try { exclusArr = (await getExclusTournoi()) || [] } catch (_e) { exclusArr = [] }
+
     // Afficher un bandeau informatif si on est en mode 'exclu' et qu'il existe
-    // au moins une manche validée (soit dans les snapshots, soit dans les
-    // tables persistées). Le bandeau avertit que la modification est
-    // impossible en mode exclu.
+    // au moins une manche validée (repérée par `part.locked`). On ignore la
+    // manche courante (`selIdxTop`) pour ne pas bloquer l'édition en cours.
     try {
       const inExcluModeTop = (typeof getMode === 'function' && getMode() === 'exclu')
+      const selIdxTop = (selectRotation && typeof selectRotation.selectedIndex === 'number') ? selectRotation.selectedIndex : 0
+      // réutiliser `exclusArr` défini plus haut
+      const exclusArrTop = exclusArr || []
       if (inExcluModeTop) {
         let hasValidated = false
         try {
-          // vérifie les tables persistées
           const persisted = tablesData || []
           for (const t of persisted) {
             if (t && Array.isArray(t.parties)) {
-              for (const p of t.parties) {
-                const sc = (p && p.scores) || []
-                if (sc.length && sc.every(v => v !== null && v !== undefined)) { hasValidated = true; break }
+              for (let idx = 0; idx < t.parties.length; idx++) {
+                if (idx === selIdxTop) continue
+                const p = t.parties[idx]
+                if (p && p.locked) { hasValidated = true; break }
               }
             }
             if (hasValidated) break
@@ -3457,9 +3463,10 @@ async function renderSaisieParTable () {
           try {
             for (const t of (validatedSnapshot || [])) {
               if (t && Array.isArray(t.parties)) {
-                for (const p of t.parties) {
-                  const sc = (p && p.scores) || []
-                  if (sc.length && sc.every(v => v !== null && v !== undefined)) { hasValidated = true; break }
+                for (let idx = 0; idx < t.parties.length; idx++) {
+                  if (idx === selIdxTop) continue
+                  const p = t.parties[idx]
+                  if (p && p.locked) { hasValidated = true; break }
                 }
               }
               if (hasValidated) break
@@ -3760,18 +3767,10 @@ async function renderSaisieParTable () {
         part.scores.forEach((cellVal, colIdx) => {
           const snapshotEntry = findSnapshotEntry(tData.table)
           const persistedEntry = findPersistedEntry(tData.table)
-          let partIsValidated = false
-          try {
-            if (part && part.locked) partIsValidated = true
-            if (!partIsValidated && snapshotEntry && Array.isArray(snapshotEntry.parties) && snapshotEntry.parties[partIdx]) {
-              const sc = snapshotEntry.parties[partIdx].scores || []
-              if (sc.length && sc.every(v => v !== null && v !== undefined)) partIsValidated = true
-            }
-            if (!partIsValidated && persistedEntry && Array.isArray(persistedEntry.parties) && persistedEntry.parties[partIdx]) {
-              const sc2 = persistedEntry.parties[partIdx].scores || []
-              if (sc2.length && sc2.every(v => v !== null && v !== undefined)) partIsValidated = true
-            }
-          } catch (_e) { partIsValidated = !!(part && part.locked) }
+          // A manche is considered validated only when the explicit `locked`
+          // flag is present (set by the validation checkbox). Ignore the
+          // currently edited manche (`selIdx`) so it stays editable.
+          let partIsValidated = !!(part && part.locked) && partIdx !== selIdx
           const td = document.createElement('td')
           td.style.padding = '1px'
           td.style.textAlign = 'center'
@@ -3800,12 +3799,8 @@ async function renderSaisieParTable () {
             td.classList.add('dealer-cell')
           }
 
-            // locked flag indicates the manche has been validated; keep it frozen
-            // but only enforce read-only here when in exclu mode. Normal mode
-            // should still allow corrections.
-            if (partIsValidated && inExcluMode) {
-              inp.readOnly = true
-            }
+            // locked flag indicates the manche has been validated; enforcement
+            // is handled below with awareness of the excluded player.
           
 
           // Validated manche view: inputs read-only for review unless user
@@ -3828,12 +3823,30 @@ async function renderSaisieParTable () {
           // Simplified exclu rule: in 'exclu' mode any already-validated
           // manche (`part.locked`) is not editable. Show an alert on focus.
           if (inExcluMode && partIsValidated) {
-            inp.readOnly = true
-            inp.disabled = true
-            inp.addEventListener('focus', () => {
-              showAlert("En mode 'exclu' vous ne pouvez pas corriger les manches déjà validées.")
-              try { inp.blur() } catch (_e) {}
-            })
+            // Allow the excluded player's seat for this manche to remain editable
+            // (we may need to enter a score for the excluded player). Determine
+            // the excluded name for this manche and compare against the player
+            // at this seat.
+            try {
+              const excluNom = (exclusArr && exclusArr[partIdx]) || null
+              const playerName = (tData.players && tData.players[colIdx]) || ''
+              const isExcluSeat = excluNom && String(excluNom) === String(playerName)
+              if (!isExcluSeat) {
+                inp.readOnly = true
+                inp.disabled = true
+                inp.addEventListener('focus', () => {
+                  showAlert("En mode 'exclu' vous ne pouvez pas corriger les manches déjà validées.")
+                  try { inp.blur() } catch (_e) {}
+                })
+              } else {
+                // ensure excluded seat remains editable
+                inp.readOnly = false
+                inp.disabled = false
+              }
+            } catch (_e) {
+              inp.readOnly = true
+              inp.disabled = true
+            }
           }
 
           // When the value changes, clear other cells in the row then compute
