@@ -2,10 +2,10 @@
   {
     "table": 1,
     "players": [
-      "Frederic",
-      "Pierre",
-      "Patrice L.",
-      "Georges L."
+      "Monique",
+      "Georges L.",
+      "Meho",
+      "Frederic"
     ],
     "parties": [
       {
@@ -69,10 +69,10 @@
   {
     "table": 2,
     "players": [
+      "Gino",
       "Nicole",
-      "Patrick L.",
-      "Georges S.",
-      "Gino"
+      "Pierre",
+      "Patrice L."
     ],
     "parties": [
       {
@@ -136,10 +136,10 @@
   {
     "table": 3,
     "players": [
-      "Meho",
-      "Monique",
-      "Daniel",
-      "Monique Ex."
+      "Patrick L.",
+      "Monique Ex.",
+      "Georges S.",
+      "Daniel"
     ],
     "parties": [
       {
