@@ -2,17 +2,15 @@
   {
     "table": 1,
     "players": [
-      "Marie-Pierre",
+      "Frederic",
       "Pierre",
       "Patrice L.",
-      "Meho",
-      "Mort 1"
+      "Georges L."
     ],
     "parties": [
       {
         "partie": 1,
         "scores": [
-          null,
           null,
           null,
           null,
@@ -26,7 +24,6 @@
           null,
           null,
           null,
-          null,
           null
         ],
         "locked": false
@@ -34,7 +31,6 @@
       {
         "partie": 3,
         "scores": [
-          null,
           null,
           null,
           null,
@@ -48,7 +44,6 @@
           null,
           null,
           null,
-          null,
           null
         ],
         "locked": false
@@ -59,14 +54,12 @@
           null,
           null,
           null,
-          null,
           null
         ],
         "locked": false
       }
     ],
     "totals": [
-      0,
       0,
       0,
       0,
@@ -76,17 +69,15 @@
   {
     "table": 2,
     "players": [
-      "Monique Ex.",
-      "Daniel",
-      "Mort 2",
-      "Georges L.",
-      "Nicole"
+      "Nicole",
+      "Patrick L.",
+      "Georges S.",
+      "Gino"
     ],
     "parties": [
       {
         "partie": 1,
         "scores": [
-          null,
           null,
           null,
           null,
@@ -100,7 +91,6 @@
           null,
           null,
           null,
-          null,
           null
         ],
         "locked": false
@@ -108,7 +98,6 @@
       {
         "partie": 3,
         "scores": [
-          null,
           null,
           null,
           null,
@@ -122,7 +111,6 @@
           null,
           null,
           null,
-          null,
           null
         ],
         "locked": false
@@ -133,14 +121,12 @@
           null,
           null,
           null,
-          null,
           null
         ],
         "locked": false
       }
     ],
     "totals": [
-      0,
       0,
       0,
       0,
@@ -150,17 +136,15 @@
   {
     "table": 3,
     "players": [
-      "Georges S.",
-      "Mort 3",
+      "Meho",
       "Monique",
-      "Patrick L.",
-      "Robert"
+      "Daniel",
+      "Monique Ex."
     ],
     "parties": [
       {
         "partie": 1,
         "scores": [
-          null,
           null,
           null,
           null,
@@ -174,7 +158,6 @@
           null,
           null,
           null,
-          null,
           null
         ],
         "locked": false
@@ -182,7 +165,6 @@
       {
         "partie": 3,
         "scores": [
-          null,
           null,
           null,
           null,
@@ -196,7 +178,6 @@
           null,
           null,
           null,
-          null,
           null
         ],
         "locked": false
@@ -207,14 +188,12 @@
           null,
           null,
           null,
-          null,
           null
         ],
         "locked": false
       }
     ],
     "totals": [
-      0,
       0,
       0,
       0,
