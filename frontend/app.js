@@ -1823,45 +1823,50 @@ function setMode (m) {
 
   // If switching out of 'exclu' mode, scrub any persisted 'locked' flags so
   // validated manches remain editable in normal modes. This clears both the
-  // per-table persistence and validated snapshot storage.
+  // per-table persistence and validated snapshot storage. Run cleanup asynchronously
+  // to avoid using `await` inside the (synchronous) setMode function.
   try {
     if (m !== 'exclu') {
-      // Clean scores_par_table persistence
-      try {
-        const persisted = await getScoresParTable() || []
-        const cleaned = (persisted || []).map(t => {
-          if (t && Array.isArray(t.parties)) {
-            t.parties = t.parties.map(p => {
-              if (p && p.locked) {
-                const np = Object.assign({}, p)
-                delete np.locked
-                return np
+      (async () => {
+        try {
+          // Clean scores_par_table persistence
+          try {
+            const persisted = await getScoresParTable() || []
+            const cleaned = (persisted || []).map(t => {
+              if (t && Array.isArray(t.parties)) {
+                t.parties = t.parties.map(p => {
+                  if (p && p.locked) {
+                    const np = Object.assign({}, p)
+                    delete np.locked
+                    return np
+                  }
+                  return p
+                })
               }
-              return p
+              return t
             })
-          }
-          return t
-        })
-        await setScoresParTable(cleaned)
-      } catch (_e) { /* ignore persistence errors */ }
+            await setScoresParTable(cleaned)
+          } catch (_e) { /* ignore persistence errors */ }
 
-      // Clean validated_manches_data in localStorage
-      try {
-        const raw = localStorage.getItem('validated_manches_data') || '{}'
-        const obj = JSON.parse(raw || '{}')
-        Object.keys(obj || {}).forEach((k) => {
-          const tables = obj[k] || []
-          tables.forEach(t => {
-            if (t && Array.isArray(t.parties)) {
-              t.parties.forEach(p => { if (p && p.locked) delete p.locked })
-            }
-          })
-          obj[k] = tables
-        })
-        try { localStorage.setItem('validated_manches_data', JSON.stringify(obj)) } catch (_e) {}
-      } catch (_e) { /* ignore localStorage errors */ }
+          // Clean validated_manches_data in localStorage
+          try {
+            const raw = localStorage.getItem('validated_manches_data') || '{}'
+            const obj = JSON.parse(raw || '{}')
+            Object.keys(obj || {}).forEach((k) => {
+              const tables = obj[k] || []
+              tables.forEach(t => {
+                if (t && Array.isArray(t.parties)) {
+                  t.parties.forEach(p => { if (p && p.locked) delete p.locked })
+                }
+              })
+              obj[k] = tables
+            })
+            try { localStorage.setItem('validated_manches_data', JSON.stringify(obj)) } catch (_e) {}
+          } catch (_e) { /* ignore localStorage errors */ }
+        } catch (_e) { /* ignore overall cleanup errors */ }
+      })()
     }
-  } catch (_e) { /* ignore overall cleanup errors */ }
+  } catch (_e) { /* ignore overall errors */ }
 }
 function getMode () {
   try {
