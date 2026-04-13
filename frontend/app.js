@@ -1820,6 +1820,7 @@ function setMode (m) {
   // ensure next render treats rotation as changed so we wipe all scores
   _lastRenderedRotation = null
   try { renderSaisie() } catch (_e) {}
+<<<<<<< HEAD
 
   // If switching out of 'exclu' mode, scrub any persisted 'locked' flags so
   // validated manches remain editable in normal modes. This clears both the
@@ -1862,6 +1863,8 @@ function setMode (m) {
       } catch (_e) { /* ignore localStorage errors */ }
     }
   } catch (_e) { /* ignore overall cleanup errors */ }
+=======
+>>>>>>> 4cb1fbe (Revert local edits: restore previous validated-manche locking behavior (local))
 }
 function getMode () {
   try {
@@ -3136,21 +3139,10 @@ async function validateAndPersistTable (tData, tblEl, mancheIndex = -1) {
       console.warn('Erreur synchronisation totaux vers scores_tournoi', e)
     }
 
-    // if we transferred, mark this manche locked in persisted model **only** in exclu mode
-    // and set inputs readOnly only when in exclu mode. In other modes users must be
-    // able to correct validated manches.
     if (transferForThisTable && mancheIndex !== -1 && partiesEls[mancheIndex]) {
-      const inExcluMode = (typeof getMode === 'function' && getMode() === 'exclu')
       tData.parties = tData.parties || []
       if (!tData.parties[mancheIndex]) tData.parties[mancheIndex] = {}
-      if (inExcluMode) {
-        tData.parties[mancheIndex].locked = true
-      } else {
-        // ensure no stale locked flag remains when not in exclu
-        if (tData.parties[mancheIndex].locked) delete tData.parties[mancheIndex].locked
-      }
-      const inputs = Array.from(partiesEls[mancheIndex].querySelectorAll('input'))
-      inputs.forEach(inp => { try { inp.readOnly = !!inExcluMode } catch (_e) {} })
+      // intentionally do NOT set `locked` here; inputs should remain editable
     }
 
     try { await renderFeuilleSoiree() } catch (_e) {}
@@ -3260,26 +3252,20 @@ async function performGlobalValidateManche () {
     // allow persistence to settle
     await new Promise(r => setTimeout(r, 100))
 
-    // Save validated manche snapshot for future review. Mark or unmark the current
-    // manche `locked` flag depending on mode: only keep locks when in 'exclu'.
+    // Save validated manche snapshot for future review. Mark the current
+    // manche as `locked` in the snapshot so renderSaisie can detect it.
     try {
       const nomRotSnap = selectRotation && selectRotation.value
       const snapshotTables = await getScoresParTable() || []
-      const inExcluModeSnap = (typeof getMode === 'function' && getMode() === 'exclu')
       if (nomRotSnap) {
         try {
           // mark locked only when the manche contains fully-filled scores
-          // and only persist locks when in 'exclu' mode. In normal mode we
-          // remove any existing locked marks so validated manches remain editable.
           snapshotTables.forEach((t) => {
-            if (!(t && Array.isArray(t.parties) && t.parties[currentIdx])) return
-            const sc = t.parties[currentIdx].scores || []
-            const fullyFilled = (sc.length && sc.every(v => v !== null && v !== undefined))
-            if (inExcluModeSnap) {
-              if (fullyFilled) t.parties[currentIdx].locked = true
-            } else {
-              // ensure no locked flag remains when not in exclu
-              if (t.parties[currentIdx].locked) delete t.parties[currentIdx].locked
+            if (t && Array.isArray(t.parties) && t.parties[currentIdx]) {
+              const sc = t.parties[currentIdx].scores || []
+              if (sc.length && sc.every(v => v !== null && v !== undefined)) {
+                // snapshot contains fully-filled scores; do not mark as locked
+              }
             }
           })
         } catch (_e) { /* ignore */ }
