@@ -51,11 +51,12 @@ export function tirageAuSort (listeTournoi) {
     if (tableIndex >= 0) {
       indicesMorts.push(tableIndex * 4)
     } else {
-      // Trop de morts ? On les traitera comme des vivants ou on les met ailleurs.
-      // Pour l'instant on les met ou on peut parmi les vivants si ça déborde.
-      vivantsMelanges.push(mortsMelanges[i]) // on remet le trop plein avec les vivants
-      mortsMelanges.splice(i, 1)
-      i--
+      // For numeric tableSize (normal tables) we use legacy rules:
+      // - tableSize === 3 -> defenders = 2
+      // - tableSize >= 4 -> defenders = 3
+      if (tableSize === 3) return (Number(attackerScore) % 2) === 0
+      return (Number(attackerScore) % 3) === 0
+      const def = -attackerScore / 3
     }
   }
 
@@ -136,9 +137,20 @@ export function reportScoreDefense (feuille, indexAttaquant, scoreAttaquant, exe
     }
   })
 
+  // compter le nombre de morts dans la table
+  const mortCount = res.reduce((c, row) => c + ((row[0] && String(row[0]).toUpperCase().includes('MORT')) ? 1 : 0), 0)
+
   // Calcul diviseur (par défaut: nbActifs-1)
   const nbActifs = nbJoueurs - indicesIgnored.size
-  const nbDefenseurs = Math.max(1, nbActifs - 1)
+  let nbDefenseurs = Math.max(1, nbActifs - 1)
+  try {
+    const pref = (typeof localStorage !== 'undefined') ? localStorage.getItem('tarot_morts_divisor') : null
+    // Apply user preference only when the table has exactly 1 Mort
+    if (mortCount === 1) {
+      if (pref === '3') nbDefenseurs = 3
+      else if (pref === '2') nbDefenseurs = Math.max(1, Math.min(2, nbActifs - 1))
+    }
+  } catch (_e) {}
   const scoreDefense = -scoreAttaquant / nbDefenseurs
 
   for (let i = 0; i < nbJoueurs; i++) {
@@ -165,19 +177,25 @@ export function reportScoreDefense (feuille, indexAttaquant, scoreAttaquant, exe
 // attackerScore: number
 // tableSizeOrPlayers: either numeric table size or array of player names
 // exemptIndices: optional Set<number> of positions that should be ignored
-export function distributeAttackerScore (attackerScore, tableSizeOrPlayers, exemptIndices = new Set(), divisorOverride = null) {
+export function distributeAttackerScore (attackerScore, tableSizeOrPlayers, exemptIndices = new Set()) {
   const res = []
-  // If caller provided players array, respect Mort placeholders ("MORT...")
   if (Array.isArray(tableSizeOrPlayers)) {
     const players = tableSizeOrPlayers
     const tableSize = players.length
     const isMort = players.map(p => String(p || '').toUpperCase().startsWith('MORT'))
     const mortCount = isMort.filter(Boolean).length
-    // treat exempt indices like morts for active count
     const nbActifs = Math.max(1, tableSize - mortCount - exemptIndices.size)
-    const nbDefenseurs = Math.max(1, nbActifs - 1)
-    const def = (divisorOverride && (divisorOverride === 2 || divisorOverride === 3)) ? -attackerScore / divisorOverride : -attackerScore / nbDefenseurs
-    // attacker at index 0, defenders placed for non-mort/non-exempt seats; others get 0
+
+    let nbDefenseurs = Math.max(1, nbActifs - 1)
+    try {
+      const pref = (typeof localStorage !== 'undefined') ? localStorage.getItem('tarot_morts_divisor') : null
+      if (mortCount === 1) {
+        if (pref === '3') nbDefenseurs = 3
+        else if (pref === '2') nbDefenseurs = Math.max(1, Math.min(2, nbActifs - 1))
+      }
+    } catch (_e) {}
+
+    const def = -attackerScore / nbDefenseurs
     res.push(attackerScore)
     for (let i = 1; i < tableSize; i++) {
       if (isMort[i] || exemptIndices.has(i)) res.push(0)
@@ -187,32 +205,38 @@ export function distributeAttackerScore (attackerScore, tableSizeOrPlayers, exem
   }
 
   const tableSize = Number(tableSizeOrPlayers || 0)
-  if (tableSize === 3) {
-    const def = -attackerScore / 2
-    res.push(attackerScore, def, def)
+  if (tableSize >= 3) {
+    const def = -attackerScore / 3
+    res.push(attackerScore)
+    for (let i = 1; i < tableSize; i++) res.push(def)
     return res
   }
-  // tableSize >= 4 : allow optional override (2 or 3), otherwise legacy (/3)
-  const def = (divisorOverride && (divisorOverride === 2 || divisorOverride === 3)) ? -attackerScore / divisorOverride : -attackerScore / 3
-  res.push(attackerScore)
-  for (let i = 1; i < tableSize; i++) res.push(def)
   return res
 }
 
-export function validateAttackerDivisibility (attackerScore, tableSizeOrPlayers, divisorOverride = null) {
+export function validateAttackerDivisibility (attackerScore, tableSizeOrPlayers) {
   if (Array.isArray(tableSizeOrPlayers)) {
     const players = tableSizeOrPlayers
     const isMort = players.map(p => String(p || '').toUpperCase().startsWith('MORT'))
     const mortCount = isMort.filter(Boolean).length
     const nbActifs = Math.max(1, players.length - mortCount)
+
+    try {
+      const pref = (typeof localStorage !== 'undefined') ? localStorage.getItem('tarot_morts_divisor') : null
+      if (mortCount === 1) {
+        const val = Number(attackerScore)
+        if (pref === '3') return (val % 3) === 0
+        if (pref === '2') return (val % 2) === 0
+      }
+    } catch (_e) {}
+
     const nbDefenseurs = Math.max(1, nbActifs - 1)
-    const divisor = (divisorOverride && (divisorOverride === 2 || divisorOverride === 3)) ? divisorOverride : nbDefenseurs
-    return (attackerScore % divisor) === 0
+    return (Number(attackerScore) % nbDefenseurs) === 0
   }
+
   const tableSize = Number(tableSizeOrPlayers || 0)
-  if (tableSize === 3) return (attackerScore % 2) === 0
-  const divisor = (divisorOverride && (divisorOverride === 2 || divisorOverride === 3)) ? divisorOverride : 3
-  return (attackerScore % divisor) === 0
+  if (tableSize >= 3) return (Number(attackerScore) % 3) === 0
+  return true
 }
 
 /**

@@ -41,6 +41,13 @@ try {
   }
 } catch (_e) { /* ignore */ }
 
+// Default preference: utiliser X2 si non défini
+try {
+  if (typeof localStorage !== 'undefined' && !localStorage.getItem('tarot_morts_divisor')) {
+    localStorage.setItem('tarot_morts_divisor', '2')
+  }
+} catch (_e) {}
+
 // --- Helpers : snapshots des manches validées (pour relecture) ---
 function saveValidatedMancheSnapshot (rotationName, tablesData) {
   try {
@@ -121,7 +128,7 @@ async function askChoiceVertical (message, buttons) {
       const cancelBtn = document.createElement('button')
       cancelBtn.className = 'btn-secondary'
       cancelBtn.textContent = 'Annuler'
-      cancelBtn.addEventListener('click', () => { cleanup(); resolve(buttons.length - 1) })
+      cancelBtn.addEventListener('click', () => { cleanup(); resolve(-1) })
       actions.appendChild(cancelBtn)
 
       dialog.appendChild(header)
@@ -132,7 +139,7 @@ async function askChoiceVertical (message, buttons) {
 
       // Keyboard
       function onKey (e) {
-        if (e.key === 'Escape') { cleanup(); resolve(buttons.length - 1) }
+        if (e.key === 'Escape') { cleanup(); resolve(-1) }
       }
       document.addEventListener('keydown', onKey)
 
@@ -147,7 +154,7 @@ async function askChoiceVertical (message, buttons) {
       if (first) first.focus()
     } catch (e) {
       console.error('askChoiceVertical error', e)
-      resolve(buttons.length - 1)
+      resolve(-1)
     }
   })
 }
@@ -192,93 +199,83 @@ function getRequiredDivisor (playersOrSize) {
     const isMort = players.map(p => String(p || '').toUpperCase().startsWith('MORT'))
     const mortCount = isMort.filter(Boolean).length
     const nbActifs = Math.max(1, players.length - mortCount)
-    const nbDefenseurs = Math.max(1, nbActifs - 1)
-    return nbDefenseurs
-  }
-  const tableSize = Number(playersOrSize || 0)
-  if (tableSize === 3) return 2
-  return 3
-}
-
-function showValidationBubble (targetEl, message, timeout = 2200) {
-  try {
-    if (!targetEl || !targetEl.getBoundingClientRect) return
-    const existing = targetEl.__validationBubble
-    if (existing && existing.parentNode) {
-      existing.innerHTML = '⚠️ ' + message
-      existing.classList.remove('fade-out')
-      clearTimeout(existing.__removeTimer)
-      clearTimeout(existing.__fadeTimer)
-      existing.__fadeTimer = setTimeout(() => { try { existing.classList.add('fade-out') } catch (_e) {} }, timeout - 300)
-      existing.__removeTimer = setTimeout(() => { try { existing.remove(); targetEl.__validationBubble = null } catch (_e) {} }, timeout)
-      return
-    }
-    const rect = targetEl.getBoundingClientRect()
-    const bubble = document.createElement('div')
-    bubble.className = 'validation-bubble'
-    bubble.innerHTML = '⚠️ ' + message
-    document.body.appendChild(bubble)
-    // position: try above the input, fallback below
-    const br = bubble.getBoundingClientRect()
-    let left = Math.round(rect.left + (rect.width - br.width) / 2)
-    if (left < 8) left = 8
-    if (left + br.width > window.innerWidth - 8) left = window.innerWidth - br.width - 8
-    let top = Math.round(rect.top - br.height - 10)
-    if (top < 8) {
-      top = Math.round(rect.bottom + 10)
-      bubble.classList.add('arrow-top')
-    } else {
-      bubble.classList.add('arrow-bottom')
-    }
-    bubble.style.left = left + 'px'
-    bubble.style.top = top + 'px'
-    bubble.__fadeTimer = setTimeout(() => { try { bubble.classList.add('fade-out') } catch (_e) {} }, timeout - 300)
-    bubble.__removeTimer = setTimeout(() => { try { bubble.remove(); targetEl.__validationBubble = null } catch (_e) {} }, timeout)
-    targetEl.__validationBubble = bubble
-  } catch (e) { /* ignore */ }
-}
-
-// (function moved below — see navigation section) // original definition removed here to avoid duplication.
-
-
-
-async function handleLuckyDrawClick (ev) {
-  const btn = (ev && ev.target && ev.target.closest) ? ev.target.closest('#btn-lucky-draw') : document.getElementById('btn-lucky-draw')
-  if (!btn) return
-
-  // quick visual acknowledgement so user can see the click reached the handler
-  try {
-    btn.classList.add('lucky-click-flash')
-    setTimeout(() => { try { btn.classList.remove('lucky-click-flash') } catch (_e) {} }, 320)
-  } catch (_e) {}
-
-  // keep the same logic as the original handler
-  try {
-    const dateIso = (inputDateTournoi && inputDateTournoi.value) ? inputDateTournoi.value : getTodayIso()
-
-    // Prevent concurrent / duplicate runs for the same date (fixes double-winner issue).
-    if (luckyDrawInProgress.has(dateIso)) return
-    luckyDrawInProgress.add(dateIso)
-
-    // clear any in-memory previous lucky/reward state for a fresh run
-    delete luckyWinnerByDate[dateIso]
-    delete rewardedPlayersByDate[dateIso]
+    // Apply user preference X2/X3 only when exactly 1 Mort is present
     try {
-      if (typeof tbodySoiree !== 'undefined' && tbodySoiree) {
-        Array.from(tbodySoiree.querySelectorAll('.col-gain .gain-lucky, .col-gain .gain-rewarded')).forEach(el => el.remove())
-      }
-    } catch (_e) {}
+      const pref = (typeof localStorage !== 'undefined') ? localStorage.getItem('tarot_morts_divisor') : null
+      if (mortCount === 1) {
+            if (reste !== 0 && players.length >= 5) {
+          let aAjouter = 4 - reste
 
-    let scores = (await getScoresTournoi()).filter(r => !String(r[0] || '').toUpperCase().startsWith('MORT'))
-    const manualModeActive = !!(cbManualEntry && cbManualEntry.checked)
-    if (!scores.length) {
-      if (Array.isArray(listeTournoi) && listeTournoi.length) {
-        scores = listeTournoi.filter(n => n && !String(n).toUpperCase().startsWith('MORT')).map(n => [n])
-      } else if (Array.isArray(dernierFullTirage) && dernierFullTirage.length > 0) {
-        const previewList = dernierFullTirage.map(p => p.nom).filter(n => n && !String(n).toUpperCase().startsWith('MORT'))
-        if (previewList.length) {
-          scores = previewList.map(n => [n])
-          try {
+          // Ne jamais dépasser 3 Morts au total
+          const existingMortCount = (listeTournoi || []).filter(n => n && String(n).toUpperCase().startsWith('MORT')).length
+          const maxAllowed = Math.max(0, 3 - existingMortCount)
+          if (maxAllowed === 0) {
+            showAlert('Impossible : nombre maximum de 3 Mort(s) déjà atteint.')
+            return
+          }
+          if (aAjouter > maxAllowed) {
+            aAjouter = maxAllowed
+            try { showToast(`Ajout limité à ${aAjouter} Mort(s) (max 3)`) } catch (_e) {}
+          }
+
+          const message = `Le nombre de joueurs (${listeTournoi.length}) n'est pas un multiple de 4.\n\nChoisissez une option :`
+          const buttons = []
+          buttons.push(`Ajouter ${aAjouter} "Mort(s)" (X3)`)
+          buttons.push(`Ajouter ${aAjouter} "Mort(s)" (X2)`)
+          buttons.push('Créer des tables de 5 ou 6 joueurs')
+          if (reste === 1) buttons.push('Mode joueur exclu')
+
+          const choice = await askChoiceVertical(message, buttons)
+          if (choice === -1) return
+          const selected = buttons[choice]
+
+          if (selected && selected.startsWith('Ajouter')) {
+            for (let i = 0; i < aAjouter; i++) {
+              let k = 1
+              while (listeTournoi.some((n) => n && String(n).toUpperCase() === `MORT ${k}`)) k++
+              listeTournoi.push(`Mort ${k}`)
+            }
+            try { if (selected.includes('(X3)')) localStorage.setItem('tarot_morts_divisor', '3') } catch (_e) {}
+            try { if (selected.includes('(X2)')) localStorage.setItem('tarot_morts_divisor', '2') } catch (_e) {}
+            setMode('morts')
+            renderListeTournoi()
+            await renderListeGenerale()
+            scheduleSaveListeTournoi()
+          } else if (selected === 'Créer des tables de 5 ou 6 joueurs') {
+            setMode('tables56')
+          } else if (selected === 'Mode joueur exclu') {
+            setMode('exclu')
+            const buttonsExclu = [...listeTournoi]
+            const messageExclu = 'Choisissez le premier joueur exclu :'
+            const choiceExclu = await askChoiceVertical(messageExclu, buttonsExclu)
+            if (choiceExclu === -1) {
+              showAlert('Aucun exclu sélectionné. Annulation du tirage.')
+              renderListeTournoi()
+              await renderListeGenerale()
+              scheduleSaveListeTournoi()
+              return
+            }
+            if (choiceExclu < listeTournoi.length) {
+              const exclu = listeTournoi[choiceExclu]
+              await setExclusTournoi([exclu])
+              try { await applyExclusToRotations([exclu]) } catch (e) { console.warn('applyExclusToRotations initial failed', e) }
+              try { markExcluInList(exclu) } catch (_e) {}
+              try { setFeuilleExcluInfo(exclu, 0) } catch (_e) {}
+              try { await updateRotationsDisplay() } catch (_e) {}
+              renderListeTournoi()
+              scheduleSaveListeTournoi()
+              renderSaisie()
+            } else {
+              showAlert('Aucun exclu sélectionné. Annulation du tirage.')
+              renderListeTournoi()
+              await renderListeGenerale()
+              scheduleSaveListeTournoi()
+              return
+            }
+          } else {
+            return
+          }
+        }
             if (tbodySoiree && tbodySoiree.querySelectorAll('tr').length === 0) {
               const frag = document.createDocumentFragment()
               previewList.forEach((nm, i) => {
@@ -2444,17 +2441,15 @@ if (btnManualCompositionJoueurs) btnManualCompositionJoueurs.addEventListener('c
 
       const message = `Le nombre de joueurs (${listeTournoi.length}) n'est pas un multiple de 4.\n\nChoisissez une option :`
       const buttons = []
-      buttons.push(`Ajouter ${aAjouter} "Mort(s)"`)
+      buttons.push(`Ajouter ${aAjouter} "Mort(s)" (X3)`)
+      buttons.push(`Ajouter ${aAjouter} "Mort(s)" (X2)`)
       buttons.push('Créer des tables de 5 ou 6 joueurs')
       if (reste === 1) buttons.push('Mode joueur exclu')
-      buttons.push('Annuler')
 
-      const choice = await askChoice(message, buttons)
+      // Use vertical choice list so options are stacked and left-aligned
+      const choice = await askChoiceVertical(message, buttons)
+      if (choice === -1) return // cancelled via overlay
       const selected = buttons[choice]
-
-      if (!selected || selected === 'Annuler') {
-        return // abort composition
-      }
 
       if (selected && selected.startsWith('Ajouter')) {
         for (let i = 0; i < aAjouter; i++) {
@@ -2464,6 +2459,9 @@ if (btnManualCompositionJoueurs) btnManualCompositionJoueurs.addEventListener('c
           }
           listeTournoi.push(`Mort ${k}`)
         }
+        // Persist chosen morts divisor mode: (X3 -> divisor '3', X2 -> divisor '2')
+        try { if (selected.includes('(X3)')) localStorage.setItem('tarot_morts_divisor', '3') } catch (_e) {}
+        try { if (selected.includes('(X2)')) localStorage.setItem('tarot_morts_divisor', '2') } catch (_e) {}
         setMode('morts')
         renderListeTournoi()
         await renderListeGenerale()
@@ -2472,9 +2470,16 @@ if (btnManualCompositionJoueurs) btnManualCompositionJoueurs.addEventListener('c
         setMode('tables56')
       } else if (selected === 'Mode joueur exclu') {
         setMode('exclu')
-        const buttonsExclu = [...listeTournoi, 'Annuler']
+        const buttonsExclu = [...listeTournoi]
         const messageExclu = 'Choisissez le premier joueur exclu :'
         const choiceExclu = await askChoiceVertical(messageExclu, buttonsExclu)
+        if (choiceExclu === -1) {
+          showAlert('Aucun exclu sélectionné. Annulation du tirage.')
+          renderListeTournoi()
+          await renderListeGenerale()
+          scheduleSaveListeTournoi()
+          return
+        }
         if (choiceExclu < listeTournoi.length) {
           const exclu = listeTournoi[choiceExclu]
           await setExclusTournoi([exclu])
@@ -4114,18 +4119,17 @@ btnTirage.addEventListener('click', async () => {
         try { showToast(`Ajout limité à ${aAjouter} Mort(s) (max 3)`) } catch (_e) {}
       }
 
-      // Proposition des options en une seule boîte
-        // Proposition des options en une seule boîte (verticales, avec choix Morts X2/X3)
-        const message = `Le nombre de joueurs (${listeTournoi.length}) n'est pas un multiple de 4.\n\nChoisissez une option :`
-        const buttons = []
-        buttons.push(`Ajouter ${aAjouter} "Mort(s)" — Score X2`)
-        buttons.push(`Ajouter ${aAjouter} "Mort(s)" — Score X3`)
-        buttons.push('Créer des tables de 5 ou 6 joueurs')
-        if (reste === 1) buttons.push('Mode joueur exclu')
-        buttons.push('Annuler')
+      const message = `Le nombre de joueurs (${listeTournoi.length}) n'est pas un multiple de 4.\n\nChoisissez une option :`
+      const buttons = []
+      buttons.push(`Ajouter ${aAjouter} "Mort(s)" (X3)`)
+      buttons.push(`Ajouter ${aAjouter} "Mort(s)" (X2)`)
+      buttons.push('Créer des tables de 5 ou 6 joueurs')
+      if (reste === 1) buttons.push('Mode joueur exclu')
 
-        const choice = await askChoiceButtonsVertical(message, buttons)
-        const selected = buttons[choice]
+      // stacked, left-aligned choices
+      const choice = await askChoiceVertical(message, buttons)
+      if (choice === -1) return // cancelled via overlay
+      const selected = buttons[choice]
 
         if (selected && selected.startsWith('Ajouter')) { // Ajouter morts (avec choix X2/X3)
           // determine divisor from label
@@ -4139,22 +4143,33 @@ btnTirage.addEventListener('click', async () => {
               k++
             }
             listeTournoi.push(`Mort ${k}`)
-          }
-          // Marquer le mode de jeu explicitement comme 'morts'
-          setMode('morts')
+        
+          listeTournoi.push(`Mort ${k}`)
+        }
+        try { if (selected.includes('(X3)')) localStorage.setItem('tarot_morts_divisor', '3') } catch (_e) {}
+        try { if (selected.includes('(X2)')) localStorage.setItem('tarot_morts_divisor', '2') } catch (_e) {}
+        // Marquer le mode de jeu explicitement comme 'morts'
+        setMode('morts')
+        renderListeTournoi()
+        await renderListeGenerale()
+        scheduleSaveListeTournoi()
+      } else if (selected === 'Créer des tables de 5 ou 6 joueurs') { // Tables 5/6
+        // Mettre le mode à 'tables56'
+        setMode('tables56')
+        // Rien d'autre à changer
+      } else if (selected === 'Mode joueur exclu') { // Mode exclu
+        setMode('exclu')
+        const buttonsExclu = [...listeTournoi]
+        const messageExclu = 'Choisissez le premier joueur exclu :'
+        // Afficher une liste verticale et scrollable pour un grand nombre de joueurs
+        const choiceExclu = await askChoiceVertical(messageExclu, buttonsExclu)
+        if (choiceExclu === -1) {
+          showAlert('Aucun exclu sélectionné. Annulation du tirage.')
           renderListeTournoi()
           await renderListeGenerale()
           scheduleSaveListeTournoi()
-        } else if (selected === 'Créer des tables de 5 ou 6 joueurs') { // Tables 5/6
-          // Mettre le mode à 'tables56'
-          setMode('tables56')
-          // Rien d'autre à changer
-        } else if (selected === 'Mode joueur exclu') { // Mode exclu
-          setMode('exclu')
-          const buttonsExclu = [...listeTournoi, 'Annuler']
-          const messageExclu = 'Choisissez le premier joueur exclu :'
-        // Afficher une liste verticale et scrollable pour un grand nombre de joueurs
-        const choiceExclu = await askChoiceVertical(messageExclu, buttonsExclu)
+          return
+        }
         if (choiceExclu < listeTournoi.length) {
           const exclu = listeTournoi[choiceExclu]
           await setExclusTournoi([exclu])
@@ -4760,7 +4775,7 @@ async function computeSerpentinLastRotation (nbParties) {
     const missingExclus = exclusArrFiltered.filter(n => !classementNoms.includes(n))
     const playersByRank = [...classementNoms, ...missingExclus]
 
-    const playersToAssignSorted = playersByRank // already ordered by ranking
+    let playersToAssignSorted = playersByRank // already ordered by ranking
 
     // Determine table sizes: in exclu+serpentin mode, all N players play,
     // so we need to recompute sizes for N (not N-1).
@@ -4797,11 +4812,44 @@ async function computeSerpentinLastRotation (nbParties) {
       }
     }
 
+    // Move any 'Mort' entries to the end so they are assigned to the last tables
+    try {
+      const mortEntries = playersToAssignSorted.filter(n => String(n || '').toUpperCase().startsWith('MORT'))
+      if (mortEntries.length > 0) {
+        const others = playersToAssignSorted.filter(n => !String(n || '').toUpperCase().startsWith('MORT'))
+        playersToAssignSorted = [...others, ...mortEntries]
+      }
+    } catch (_e) { /* ignore */ }
+
+    // Build tables while reserving North seats of the last K tables for Mort
+    const nbTablesFmt = tableSizes.length
+    const allPlayersList = Array.isArray(playersToAssignSorted) ? playersToAssignSorted.slice() : []
+    const mortEntries = allPlayersList.filter(n => String(n || '').toUpperCase().startsWith('MORT'))
+    const others = allPlayersList.filter(n => !String(n || '').toUpperCase().startsWith('MORT'))
+    const k = Math.min(mortEntries.length, nbTablesFmt)
+
     const tables = tableSizes.map(() => [])
-    let playerIdx = 0
-    for (let t = 0; t < tableSizes.length && playerIdx < playersToAssignSorted.length; t++) {
-      for (let s = 0; s < tableSizes[t] && playerIdx < playersToAssignSorted.length; s++) {
-        tables[t].push(playersToAssignSorted[playerIdx++])
+
+    // Fill seats, skipping (reserving) North positions of last k tables
+    let otherIdx = 0
+    const firstReservedIndex = Math.max(0, nbTablesFmt - k)
+    for (let t = 0; t < nbTablesFmt; t++) {
+      for (let s = 0; s < tableSizes[t]; s++) {
+        if (t >= firstReservedIndex && s === 0) {
+          // reserve north seat for Mort
+          tables[t].push(null)
+        } else {
+          const next = (otherIdx < others.length) ? others[otherIdx++] : null
+          tables[t].push(next)
+        }
+      }
+    }
+
+    // Place Mort entries into reserved North seats of last k tables
+    for (let i = 0; i < k; i++) {
+      const targetIdx = nbTablesFmt - 1 - i
+      if (targetIdx >= 0 && tables[targetIdx] && tables[targetIdx].length > 0) {
+        tables[targetIdx][0] = mortEntries[i] || tables[targetIdx][0]
       }
     }
     // Convert to the format expected
@@ -4809,6 +4857,19 @@ async function computeSerpentinLastRotation (nbParties) {
       table: idx + 1,
       joueurs: joueurs.map(nom => ({ nom }))
     }))
+
+    // Ensure any Mort in a table is placed at North (index 0)
+    try {
+      for (const t of formattedTables) {
+        const joueurs = t.joueurs || []
+        const indexMort = joueurs.findIndex((j, idx) => idx > 0 && j && String(j.nom || '').toUpperCase().includes('MORT'))
+        if (indexMort > 0) {
+          const tmp = joueurs[0]
+          joueurs[0] = joueurs[indexMort]
+          joueurs[indexMort] = tmp
+        }
+      }
+    } catch (_e) { /* ignore */ }
 
     // Insert last rotation
     const rotName = `Rotation ${nbParties}`
