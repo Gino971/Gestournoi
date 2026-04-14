@@ -57,167 +57,154 @@ function saveValidatedMancheSnapshot (rotationName, tablesData) {
   } catch (_e) { /* ignore */ }
 }
 
-function loadValidatedMancheSnapshot (rotationName) {
-  try {
-    const all = JSON.parse(localStorage.getItem('validated_manches_data') || '{}')
-    return all[rotationName] || null
-  } catch (_e) { return null }
-}
-
-function clearAllValidatedMancheSnapshots () {
-  try { localStorage.removeItem('validated_manches_data') } catch (_e) { /* ignore */ }
-}
-
-// Helper Confirmation Oui/Non (via Electron si dispo)
-async function askConfirm (message) {
-  if (window.electronAPI && window.electronAPI.confirm) {
-    return await window.electronAPI.confirm(message)
-  }
-  const idx = await _showCustomDialog(message, [
-    { label: 'Oui', cls: 'custom-dialog-btn-primary' },
-    { label: 'Non', cls: 'custom-dialog-btn-secondary' }
-  ])
-  return idx === 0
-}
-
 // Helper Choix multiples
 async function askChoice (message, buttons) {
   if (window.electronAPI && window.electronAPI.choice) {
-    // Small ephemeral validation bubble near an input
-    function getRequiredDivisor (playersOrSize) {
-      try {
-        if (Array.isArray(playersOrSize)) {
-          const players = playersOrSize
-          const mortCount = players.filter(p => String(p || '').toUpperCase().startsWith('MORT')).length
-          if (mortCount === 1) {
-            try {
-              const pref = (typeof localStorage !== 'undefined') ? localStorage.getItem('tarot_morts_divisor') : null
-              const val = pref ? parseInt(pref, 10) : 2
-              return (val === 2 || val === 3) ? val : 2
-            } catch (e) {
-              return 2
-            }
-          }
-          return 3
+    return await window.electronAPI.choice(message, buttons)
+  }
+  const dialogBtns = buttons.map((b, i) => ({
+    label: b,
+    cls: i === buttons.length - 1 ? 'custom-dialog-btn-secondary' : 'custom-dialog-btn-primary'
+  }))
+  return _showCustomDialog(message, dialogBtns)
+}
+
+// Choix vertical scrollable (utilisé pour sélection longue)
+async function askChoiceVertical (message, buttons) {
+  return new Promise((resolve) => {
+    try {
+      const overlay = document.createElement('div')
+      overlay.id = 'choice-vertical-overlay'
+      overlay.className = 'choice-vertical-overlay'
+
+      const dialog = document.createElement('div')
+      dialog.className = 'choice-vertical-dialog'
+
+      const header = document.createElement('div')
+      header.className = 'choice-vertical-header'
+      header.textContent = message
+
+      const list = document.createElement('div')
+      list.className = 'choice-vertical-list'
+
+      buttons.forEach((b, i) => {
+        const item = document.createElement('button')
+        item.className = 'choice-vertical-item'
+        item.textContent = b
+        item.addEventListener('click', () => { cleanup(); resolve(i) })
+        list.appendChild(item)
+      })
+
+      const actions = document.createElement('div')
+      actions.className = 'choice-vertical-actions'
+      const cancelBtn = document.createElement('button')
+      cancelBtn.className = 'btn-secondary'
+      cancelBtn.textContent = 'Annuler'
+      cancelBtn.addEventListener('click', () => { cleanup(); resolve(-1) })
+      actions.appendChild(cancelBtn)
+
+      dialog.appendChild(header)
+      dialog.appendChild(list)
+      dialog.appendChild(actions)
+      overlay.appendChild(dialog)
+      document.body.appendChild(overlay)
+
+      function onKey (e) { if (e.key === 'Escape') { cleanup(); resolve(-1) } }
+      document.addEventListener('keydown', onKey)
+
+      function cleanup () {
+        document.removeEventListener('keydown', onKey)
+        if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay)
+      }
+
+      const first = list.querySelector('button')
+      if (first) first.focus()
+    } catch (e) {
+      console.error('askChoiceVertical error', e)
+      resolve(-1)
+    }
+  })
+}
+
+// Variant: uses existing custom-dialog overlay but forces vertical buttons
+async function askChoiceButtonsVertical (message, buttons) {
+  if (window.electronAPI && window.electronAPI.choice) {
+    return await window.electronAPI.choice(message, buttons)
+  }
+  return new Promise((resolve) => {
+    const overlay = document.getElementById('custom-dialog-overlay')
+    const msgEl = document.getElementById('custom-dialog-message')
+    const btnContainer = document.getElementById('custom-dialog-buttons')
+    if (!overlay || !msgEl || !btnContainer) { resolve(0); return }
+    msgEl.textContent = message
+    btnContainer.innerHTML = ''
+    btnContainer.className = 'custom-dialog-buttons vertical'
+
+    buttons.forEach((b, i) => {
+      const btn = document.createElement('button')
+      btn.textContent = b
+      btn.className = i === buttons.length - 1 ? 'custom-dialog-btn-secondary' : 'custom-dialog-btn-primary'
+      btn.addEventListener('click', () => { close(i) })
+      btnContainer.appendChild(btn)
+    })
+
+    overlay.classList.remove('hidden')
+    const first = btnContainer.querySelector('button')
+    if (first) first.focus()
+
+    function onKey (e) { if (e.key === 'Escape') close(buttons.length - 1) }
+    document.addEventListener('keydown', onKey)
+    function close (idx) { document.removeEventListener('keydown', onKey); overlay.classList.add('hidden'); resolve(idx) }
+  })
+}
+
+// Small ephemeral validation bubble near an input
+function getRequiredDivisor (playersOrSize) {
+  try {
+    if (Array.isArray(playersOrSize)) {
+      const players = playersOrSize
+      const mortCount = players.filter(p => String(p || '').toUpperCase().startsWith('MORT')).length
+      if (mortCount === 1) {
+        try {
+          const pref = (typeof localStorage !== 'undefined') ? localStorage.getItem('tarot_morts_divisor') : null
+          const val = pref ? parseInt(pref, 10) : 2
+          return (val === 2 || val === 3) ? val : 2
+        } catch (e) {
+          return 2
         }
-        if (typeof playersOrSize === 'number') return 3
-      } catch (e) {}
+      }
       return 3
     }
-          if (selected && selected.startsWith('Ajouter')) {
-            for (let i = 0; i < aAjouter; i++) {
-              let k = 1
-              while (listeTournoi.some((n) => n && String(n).toUpperCase() === `MORT ${k}`)) k++
-              listeTournoi.push(`Mort ${k}`)
-            }
-            try { if (selected.includes('(X3)')) localStorage.setItem('tarot_morts_divisor', '3') } catch (_e) {}
-            try { if (selected.includes('(X2)')) localStorage.setItem('tarot_morts_divisor', '2') } catch (_e) {}
-            setMode('morts')
-            renderListeTournoi()
-            await renderListeGenerale()
-            scheduleSaveListeTournoi()
-          } else if (selected === 'Créer des tables de 5 ou 6 joueurs') {
-            setMode('tables56')
-          } else if (selected === 'Mode joueur exclu') {
-            setMode('exclu')
-            const buttonsExclu = [...listeTournoi]
-            const messageExclu = 'Choisissez le premier joueur exclu :'
-            const choiceExclu = await askChoiceVertical(messageExclu, buttonsExclu)
-            if (choiceExclu === -1) {
-              showAlert('Aucun exclu sélectionné. Annulation du tirage.')
-              renderListeTournoi()
-              await renderListeGenerale()
-              scheduleSaveListeTournoi()
-              return
-            }
-            if (choiceExclu < listeTournoi.length) {
-              const exclu = listeTournoi[choiceExclu]
-              await setExclusTournoi([exclu])
-              try { await applyExclusToRotations([exclu]) } catch (e) { console.warn('applyExclusToRotations initial failed', e) }
-              try { markExcluInList(exclu) } catch (_e) {}
-              try { setFeuilleExcluInfo(exclu, 0) } catch (_e) {}
-              try { await updateRotationsDisplay() } catch (_e) {}
-              renderListeTournoi()
-              scheduleSaveListeTournoi()
-              renderSaisie()
-            } else {
-              showAlert('Aucun exclu sélectionné. Annulation du tirage.')
-              renderListeTournoi()
-              await renderListeGenerale()
-              scheduleSaveListeTournoi()
-              return
-            }
-          } else {
-            return
-          }
-        }
-            if (tbodySoiree && tbodySoiree.querySelectorAll('tr').length === 0) {
-              const frag = document.createDocumentFragment()
-              previewList.forEach((nm, i) => {
-                const tr = document.createElement('tr')
-                tr.dataset.nom = encodeURIComponent(nm)
-                tr.dataset.temp = '1'
-                tr.innerHTML = `<td class="col-rang">${i + 1}</td><td class="col-joueur">${nm}</td><td class="col-total"></td><td class="col-gain"></td>`
-                frag.appendChild(tr)
-              })
-              tbodySoiree.appendChild(frag)
-            }
-          } catch (_e) {}
-        }
-      } else if (manualModeActive) {
-        scores = (listeTournoi || []).filter(n => n && !String(n).toUpperCase().startsWith('MORT')).map(n => [n])
-      } else {
-        // NEW: fallback to the general players list so "Tirage chanceux" works
-        // even if no full tirage / no listeTournoi has been created yet.
-        try {
-          const gen = await loadListeJoueurs()
-          if (Array.isArray(gen) && gen.length) {
-            const genActive = gen.filter(n => n && !String(n).toUpperCase().startsWith('MORT'))
-            if (genActive.length) {
-              scores = genActive.map(n => [n])
-              try {
-                if (tbodySoiree && tbodySoiree.querySelectorAll('tr').length === 0) {
-                  const frag = document.createDocumentFragment()
-                  genActive.forEach((nm, i) => {
-                    const tr = document.createElement('tr')
-                    tr.dataset.nom = encodeURIComponent(nm)
-                    tr.dataset.temp = '1'
-                    tr.innerHTML = `<td class="col-rang">${i + 1}</td><td class="col-joueur">${nm}</td><td class="col-total"></td><td class="col-gain"></td>`
-                    frag.appendChild(tr)
-                  })
-                  tbodySoiree.appendChild(frag)
-                }
-              } catch (_e) {}
+    if (typeof playersOrSize === 'number') return 3
+  } catch (e) {}
+  return 3
+}
 
-              // Persist temporary scores so subsequent renders (renderFeuilleSoiree)
-              // and other helpers see the active list even without a prior tirage.
-              try { await setScoresTournoi(scores) } catch (_e) {}
-            }
-          }
-        } catch (_e) {}
-      }
-    }
-
-    if (!scores.length) {
-      // Visual feedback so user knows the handler ran but there's no data to act on
+    // Lucky draw handler (attached to btn-lucky-draw)
+    async function handleLuckyDrawClick (ev) {
       try {
-        btn.classList.add('lucky-no-data')
-        const note = document.getElementById('manual-entry-note')
-        if (note) {
-          note.textContent = 'Aucun joueur actif pour cette date — composez la liste ou changez la date.'
-          note.classList.remove('hidden')
-          setTimeout(() => { try { note.classList.add('hidden'); note.textContent = '' } catch (_e) {} }, 2000)
+        const btn = (ev && ev.target) ? ev.target.closest('#btn-lucky-draw') : document.getElementById('btn-lucky-draw')
+        const dateIso = (inputDateTournoi && inputDateTournoi.value) ? inputDateTournoi.value : getTodayIso()
+        const scores = await getScoresTournoi()
+        if (!scores.length) {
+          // Visual feedback so user knows the handler ran but there's no data to act on
+          try {
+            btn.classList.add('lucky-no-data')
+            const note = document.getElementById('manual-entry-note')
+            if (note) {
+              note.textContent = 'Aucun joueur actif pour cette date — composez la liste ou changez la date.'
+              note.classList.remove('hidden')
+              setTimeout(() => { try { note.classList.add('hidden'); note.textContent = '' } catch (_e) {} }, 2000)
+            }
+            setTimeout(() => { try { btn.classList.remove('lucky-no-data') } catch (_e) {} }, 900)
+          } catch (_e) {}
+          return
         }
-        setTimeout(() => { try { btn.classList.remove('lucky-no-data') } catch (_e) {} }, 900)
-      } catch (_e) {}
-      return
-    }
+        if (!rewardedPlayersByDate[dateIso]) rewardedPlayersByDate[dateIso] = new Set()
+        const rewarded = rewardedPlayersByDate[dateIso]
 
-    if (!rewardedPlayersByDate[dateIso]) rewardedPlayersByDate[dateIso] = new Set()
-    const rewarded = rewardedPlayersByDate[dateIso]
-
-    let placesForDate = []
-    try { placesForDate = await computeRedistribPlacesFor(dateIso, scores.length) } catch (e) { placesForDate = [] }
+        let placesForDate = []
+        try { placesForDate = await computeRedistribPlacesFor(dateIso, scores.length) } catch (e) { placesForDate = [] }
 
     const sortedByTotal = [...scores].sort((a, b) => {
       const aVals = a.slice(1).map(Number); const aTotal = aVals.length ? aVals[aVals.length - 1] : 0
