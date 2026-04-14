@@ -83,152 +83,27 @@ async function askConfirm (message) {
 // Helper Choix multiples
 async function askChoice (message, buttons) {
   if (window.electronAPI && window.electronAPI.choice) {
-    return await window.electronAPI.choice(message, buttons)
-  }
-  const dialogBtns = buttons.map((b, i) => ({
-    label: b,
-    cls: i === buttons.length - 1 ? 'custom-dialog-btn-secondary' : 'custom-dialog-btn-primary'
-  }))
-  return _showCustomDialog(message, dialogBtns)
-}
-
-// Choix vertical scrollable (utilisé pour la sélection du premier exclu lorsqu'il y a beaucoup de joueurs)
-async function askChoiceVertical (message, buttons) {
-  return new Promise((resolve) => {
-    try {
-      // Overlay
-      const overlay = document.createElement('div')
-      overlay.id = 'choice-vertical-overlay'
-      overlay.className = 'choice-vertical-overlay'
-
-      // Dialog
-      const dialog = document.createElement('div')
-      dialog.className = 'choice-vertical-dialog'
-
-      const header = document.createElement('div')
-      header.className = 'choice-vertical-header'
-      header.textContent = message
-
-      const list = document.createElement('div')
-      list.className = 'choice-vertical-list'
-
-      buttons.forEach((b, i) => {
-        const item = document.createElement('button')
-        item.className = 'choice-vertical-item'
-        item.textContent = b
-        item.addEventListener('click', () => {
-          cleanup()
-          resolve(i)
-        })
-        list.appendChild(item)
-      })
-
-      const actions = document.createElement('div')
-      actions.className = 'choice-vertical-actions'
-      const cancelBtn = document.createElement('button')
-      cancelBtn.className = 'btn-secondary'
-      cancelBtn.textContent = 'Annuler'
-      cancelBtn.addEventListener('click', () => { cleanup(); resolve(-1) })
-      actions.appendChild(cancelBtn)
-
-      dialog.appendChild(header)
-      dialog.appendChild(list)
-      dialog.appendChild(actions)
-      overlay.appendChild(dialog)
-      document.body.appendChild(overlay)
-
-      // Keyboard
-      function onKey (e) {
-        if (e.key === 'Escape') { cleanup(); resolve(-1) }
-      }
-      document.addEventListener('keydown', onKey)
-
-      // Cleanup helper
-      function cleanup () {
-        document.removeEventListener('keydown', onKey)
-        if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay)
-      }
-
-      // focus first item
-      const first = list.querySelector('button')
-      if (first) first.focus()
-    } catch (e) {
-      console.error('askChoiceVertical error', e)
-      resolve(-1)
+    // Small ephemeral validation bubble near an input
+    function getRequiredDivisor (playersOrSize) {
+      try {
+        if (Array.isArray(playersOrSize)) {
+          const players = playersOrSize
+          const mortCount = players.filter(p => String(p || '').toUpperCase().startsWith('MORT')).length
+          if (mortCount === 1) {
+            try {
+              const pref = (typeof localStorage !== 'undefined') ? localStorage.getItem('tarot_morts_divisor') : null
+              const val = pref ? parseInt(pref, 10) : 2
+              return (val === 2 || val === 3) ? val : 2
+            } catch (e) {
+              return 2
+            }
+          }
+          return 3
+        }
+        if (typeof playersOrSize === 'number') return 3
+      } catch (e) {}
+      return 3
     }
-  })
-}
-
-// Variant of askChoice that renders dialog buttons vertically (full-width)
-async function askChoiceButtonsVertical (message, buttons) {
-  if (window.electronAPI && window.electronAPI.choice) {
-    return await window.electronAPI.choice(message, buttons)
-  }
-  // reuse internal dialog system but force the button container to vertical
-  return new Promise((resolve) => {
-    const overlay = document.getElementById('custom-dialog-overlay')
-    const msgEl = document.getElementById('custom-dialog-message')
-    const btnContainer = document.getElementById('custom-dialog-buttons')
-    if (!overlay || !msgEl || !btnContainer) { resolve(0); return }
-    msgEl.textContent = message
-    btnContainer.innerHTML = ''
-    btnContainer.className = 'custom-dialog-buttons vertical'
-
-    buttons.forEach((b, i) => {
-      const btn = document.createElement('button')
-      btn.textContent = b
-      btn.className = i === buttons.length - 1 ? 'custom-dialog-btn-secondary' : 'custom-dialog-btn-primary'
-      btn.addEventListener('click', () => { close(i) })
-      btnContainer.appendChild(btn)
-    })
-
-    overlay.classList.remove('hidden')
-    const first = btnContainer.querySelector('button')
-    if (first) first.focus()
-
-    function onKey (e) { if (e.key === 'Escape') close(buttons.length - 1) }
-    document.addEventListener('keydown', onKey)
-    function close (idx) { document.removeEventListener('keydown', onKey); overlay.classList.add('hidden'); resolve(idx) }
-  })
-}
-
-// Small ephemeral validation bubble near an input
-function getRequiredDivisor (playersOrSize) {
-  if (Array.isArray(playersOrSize)) {
-    const players = playersOrSize
-    const isMort = players.map(p => String(p || '').toUpperCase().startsWith('MORT'))
-    const mortCount = isMort.filter(Boolean).length
-    const nbActifs = Math.max(1, players.length - mortCount)
-    // Apply user preference X2/X3 only when exactly 1 Mort is present
-    try {
-      const pref = (typeof localStorage !== 'undefined') ? localStorage.getItem('tarot_morts_divisor') : null
-      if (mortCount === 1) {
-            if (reste !== 0 && players.length >= 5) {
-          let aAjouter = 4 - reste
-
-          // Ne jamais dépasser 3 Morts au total
-          const existingMortCount = (listeTournoi || []).filter(n => n && String(n).toUpperCase().startsWith('MORT')).length
-          const maxAllowed = Math.max(0, 3 - existingMortCount)
-          if (maxAllowed === 0) {
-            showAlert('Impossible : nombre maximum de 3 Mort(s) déjà atteint.')
-            return
-          }
-          if (aAjouter > maxAllowed) {
-            aAjouter = maxAllowed
-            try { showToast(`Ajout limité à ${aAjouter} Mort(s) (max 3)`) } catch (_e) {}
-          }
-
-          const message = `Le nombre de joueurs (${listeTournoi.length}) n'est pas un multiple de 4.\n\nChoisissez une option :`
-          const buttons = []
-          buttons.push(`Ajouter ${aAjouter} "Mort(s)" (X3)`)
-          buttons.push(`Ajouter ${aAjouter} "Mort(s)" (X2)`)
-          buttons.push('Créer des tables de 5 ou 6 joueurs')
-          if (reste === 1) buttons.push('Mode joueur exclu')
-
-          const choice = await askChoiceVertical(message, buttons)
-          if (choice === -1) return
-          const selected = buttons[choice]
-
           if (selected && selected.startsWith('Ajouter')) {
             for (let i = 0; i < aAjouter; i++) {
               let k = 1
