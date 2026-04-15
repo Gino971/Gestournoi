@@ -4009,25 +4009,17 @@ btnTirage.addEventListener('click', async () => {
       const selected = buttons[choice]
 
         if (selected && selected.startsWith('Ajouter')) { // Ajouter morts (avec choix X2/X3)
-          // determine divisor from label
+          // determine divisor from label and persist preference
           const divisor = selected.includes('X2') ? 2 : 3
-          try { localStorage.setItem('morts_divisor', String(divisor)) } catch (_e) {}
+          try { localStorage.setItem('tarot_morts_divisor', String(divisor)) } catch (_e) {}
           for (let i = 0; i < aAjouter; i++) {
             let k = 1
-            while (
-              listeTournoi.some((n) => n && String(n).toUpperCase() === `MORT ${k}`)
-            ) {
-              k++
-            }
+            while (listeTournoi.some((n) => n && String(n).toUpperCase() === `MORT ${k}`)) k++
             listeTournoi.push(`Mort ${k}`)
-        
-          listeTournoi.push(`Mort ${k}`)
-        }
-        try { if (selected.includes('(X3)')) localStorage.setItem('tarot_morts_divisor', '3') } catch (_e) {}
-        try { if (selected.includes('(X2)')) localStorage.setItem('tarot_morts_divisor', '2') } catch (_e) {}
-        // Marquer le mode de jeu explicitement comme 'morts'
-        setMode('morts')
-        renderListeTournoi()
+          }
+          // Marquer le mode de jeu explicitement comme 'morts'
+          setMode('morts')
+          renderListeTournoi()
         await renderListeGenerale()
         scheduleSaveListeTournoi()
       } else if (selected === 'Créer des tables de 5 ou 6 joueurs') { // Tables 5/6
