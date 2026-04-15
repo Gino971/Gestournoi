@@ -57,6 +57,21 @@ function saveValidatedMancheSnapshot (rotationName, tablesData) {
   } catch (_e) { /* ignore */ }
 }
 
+// Charger une snapshot validée pour une rotation (ou null si absent)
+function loadValidatedMancheSnapshot (rotationName) {
+  try {
+    const all = JSON.parse(localStorage.getItem('validated_manches_data') || '{}')
+    if (!all || !Object.prototype.hasOwnProperty.call(all, rotationName)) return null
+    // Return a deep copy so callers may modify without mutating storage
+    return JSON.parse(JSON.stringify(all[rotationName]))
+  } catch (_e) { return null }
+}
+
+// Supprime toutes les snapshots validées (utilisé par certaines actions de reset)
+function clearAllValidatedMancheSnapshots () {
+  try { localStorage.removeItem('validated_manches_data') } catch (_e) { /* ignore */ }
+}
+
 // Helper Choix multiples
 async function askChoice (message, buttons) {
   if (window.electronAPI && window.electronAPI.choice) {
