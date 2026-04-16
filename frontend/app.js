@@ -217,6 +217,13 @@ function getRequiredDivisor (playersOrSize) {
         }
         if (!rewardedPlayersByDate[dateIso]) rewardedPlayersByDate[dateIso] = new Set()
         const rewarded = rewardedPlayersByDate[dateIso]
+        // Ensure any previous lucky label is removed so the UI shows a fresh draw
+        try {
+          const tbody = document.getElementById('tbody-soiree') || tbodySoiree
+          if (tbody && tbody.querySelectorAll) {
+            Array.from(tbody.querySelectorAll('.col-gain .gain-lucky')).forEach(el => el.remove())
+          }
+        } catch (_e) {}
 
         let placesForDate = []
         try { placesForDate = await computeRedistribPlacesFor(dateIso, scores.length) } catch (e) { placesForDate = [] }
@@ -1256,6 +1263,12 @@ async function updateLuckyButtonState () {
     const btn = document.getElementById('btn-lucky-draw')
     if (!btn) return
     const dateIso = (inputDateTournoi && inputDateTournoi.value) ? inputDateTournoi.value : getTodayIso()
+    // Guard against concurrent/re-entrant execution for the same date
+    if (luckyDrawInProgress.has(dateIso)) return
+    // Do NOT acquire the in-progress lock here — locks are added/removed by the
+    // actual draw handler to avoid blocking the button permanently.
+    // If a lucky winner already exists for this date, clear previous 'chanceux' state
+    try { clearLuckyForDate(dateIso) } catch (_e) {}
     // Keep the lucky-draw enabled while the tournament is ongoing.
     // Disable the button only if the tournament is finalized (an entry exists in recap).
     try {
