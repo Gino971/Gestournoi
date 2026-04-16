@@ -2549,7 +2549,8 @@ function markExcluInList (nomExclu) {
       const span = document.createElement('span')
       span.className = 'label-exclu'
       span.textContent = ' (exclu)'
-      r.querySelector('.joueur-tournoi-nom').appendChild(span)
+      // append as a sibling so it participates in the row's flex layout
+      r.appendChild(span)
     }
   })
 }
