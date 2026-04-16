@@ -81,16 +81,15 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
 }
 
 .thumb-up {
-  font-size: 4.5rem; /* larger check/thumb */
-  animation: popIn 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  background: rgba(16,163,74,0.95); /* green card for success */
-  color: #fff; /* ensure check is visible on green */
-  padding: 0.6rem 0.8rem;
-  border-radius: 12px;
+  font-size: 3rem; /* smaller, less dominant */
+  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  background: rgba(0,0,0,0.6); /* small card instead of full-screen dim */
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 26px rgba(16,163,74,0.28);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.45);
 }
 
 @keyframes popIn {
@@ -152,7 +151,7 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
 
 .choice-vertical-actions {
   display: flex;
-  justify-content: flex-start;
+  justify-content: flex-end;
   gap: 0.5rem;
   margin-top: 0.25rem;
 }
@@ -1348,8 +1347,7 @@ th, td {
 }
 .movement-comment {
   display: inline-block;
-  margin-left: 2px;
-  vertical-align: middle;
+  margin-left: 8px;
   color: #bdbdbd;
   font-size: 0.85rem; /* smaller font */
   line-height: 1.1;
@@ -1772,11 +1770,10 @@ tbody.lucky-active tr.lucky-highlight { opacity: 1; filter: none; transform: tra
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
-  justify-content: flex-start;
+  justify-content: flex-end;
 }
 
 .custom-dialog-buttons button {
-  flex: 1 1 0; /* distribute available space so buttons have same width */
   min-width: 90px;
   padding: 0.55rem 1.1rem;
   border-radius: 8px;
@@ -2261,17 +2258,14 @@ nav button.timer-nav-flash {
 .btn-validate-check {
   background: none;
   border: none;
-  color: #18981d;
-  
-  font-size: 3.0rem; /* taille doublée et corrigée pour la coche verte */
+  color: #4caf50;
+  font-size: 3.5em;
   cursor: pointer;
   margin-left: -10px;
-  padding: -11px -11px;
-  line-height: 1;
-  transition: transform 0.12s ease, color 0.15s;
+  padding: 6px 8px;
+  transition: color 0.15s;
 }
 .btn-validate-check:hover {
-  color: #c6e953;
-  transform: translateY(-1px) scale(1.5);
+  color: #81c784;
 }
 /* ================================ */

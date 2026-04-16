@@ -57,19 +57,27 @@ function saveValidatedMancheSnapshot (rotationName, tablesData) {
   } catch (_e) { /* ignore */ }
 }
 
-// Charger une snapshot validée pour une rotation (ou null si absent)
 function loadValidatedMancheSnapshot (rotationName) {
   try {
     const all = JSON.parse(localStorage.getItem('validated_manches_data') || '{}')
-    if (!all || !Object.prototype.hasOwnProperty.call(all, rotationName)) return null
-    // Return a deep copy so callers may modify without mutating storage
-    return JSON.parse(JSON.stringify(all[rotationName]))
+    return all[rotationName] || null
   } catch (_e) { return null }
 }
 
-// Supprime toutes les snapshots validées (utilisé par certaines actions de reset)
 function clearAllValidatedMancheSnapshots () {
   try { localStorage.removeItem('validated_manches_data') } catch (_e) { /* ignore */ }
+}
+
+// Helper Confirmation Oui/Non (via Electron si dispo)
+async function askConfirm (message) {
+  if (window.electronAPI && window.electronAPI.confirm) {
+    return await window.electronAPI.confirm(message)
+  }
+  const idx = await _showCustomDialog(message, [
+    { label: 'Oui', cls: 'custom-dialog-btn-primary' },
+    { label: 'Non', cls: 'custom-dialog-btn-secondary' }
+  ])
+  return idx === 0
 }
 
 // Helper Choix multiples
@@ -84,14 +92,16 @@ async function askChoice (message, buttons) {
   return _showCustomDialog(message, dialogBtns)
 }
 
-// Choix vertical scrollable (utilisé pour sélection longue)
+// Choix vertical scrollable (utilisé pour la sélection du premier exclu lorsqu'il y a beaucoup de joueurs)
 async function askChoiceVertical (message, buttons) {
   return new Promise((resolve) => {
     try {
+      // Overlay
       const overlay = document.createElement('div')
       overlay.id = 'choice-vertical-overlay'
       overlay.className = 'choice-vertical-overlay'
 
+      // Dialog
       const dialog = document.createElement('div')
       dialog.className = 'choice-vertical-dialog'
 
@@ -106,7 +116,10 @@ async function askChoiceVertical (message, buttons) {
         const item = document.createElement('button')
         item.className = 'choice-vertical-item'
         item.textContent = b
-        item.addEventListener('click', () => { cleanup(); resolve(i) })
+        item.addEventListener('click', () => {
+          cleanup()
+          resolve(i)
+        })
         list.appendChild(item)
       })
 
@@ -124,14 +137,19 @@ async function askChoiceVertical (message, buttons) {
       overlay.appendChild(dialog)
       document.body.appendChild(overlay)
 
-      function onKey (e) { if (e.key === 'Escape') { cleanup(); resolve(-1) } }
+      // Keyboard
+      function onKey (e) {
+        if (e.key === 'Escape') { cleanup(); resolve(-1) }
+      }
       document.addEventListener('keydown', onKey)
 
+      // Cleanup helper
       function cleanup () {
         document.removeEventListener('keydown', onKey)
         if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay)
       }
 
+      // focus first item
       const first = list.querySelector('button')
       if (first) first.focus()
     } catch (e) {
@@ -141,85 +159,178 @@ async function askChoiceVertical (message, buttons) {
   })
 }
 
-// Variant: uses existing custom-dialog overlay but forces vertical buttons
-async function askChoiceButtonsVertical (message, buttons) {
-  if (window.electronAPI && window.electronAPI.choice) {
-    return await window.electronAPI.choice(message, buttons)
-  }
-  return new Promise((resolve) => {
-    const overlay = document.getElementById('custom-dialog-overlay')
-    const msgEl = document.getElementById('custom-dialog-message')
-    const btnContainer = document.getElementById('custom-dialog-buttons')
-    if (!overlay || !msgEl || !btnContainer) { resolve(0); return }
-    msgEl.textContent = message
-    btnContainer.innerHTML = ''
-    btnContainer.className = 'custom-dialog-buttons vertical'
-
-    buttons.forEach((b, i) => {
-      const btn = document.createElement('button')
-      btn.textContent = b
-      btn.className = i === buttons.length - 1 ? 'custom-dialog-btn-secondary' : 'custom-dialog-btn-primary'
-      btn.addEventListener('click', () => { close(i) })
-      btnContainer.appendChild(btn)
-    })
-
-    overlay.classList.remove('hidden')
-    const first = btnContainer.querySelector('button')
-    if (first) first.focus()
-
-    function onKey (e) { if (e.key === 'Escape') close(buttons.length - 1) }
-    document.addEventListener('keydown', onKey)
-    function close (idx) { document.removeEventListener('keydown', onKey); overlay.classList.add('hidden'); resolve(idx) }
-  })
-}
-
 // Small ephemeral validation bubble near an input
 function getRequiredDivisor (playersOrSize) {
-  try {
-    if (Array.isArray(playersOrSize)) {
-      const players = playersOrSize
-      const mortCount = players.filter(p => String(p || '').toUpperCase().startsWith('MORT')).length
+  if (Array.isArray(playersOrSize)) {
+    const players = playersOrSize
+    const isMort = players.map(p => String(p || '').toUpperCase().startsWith('MORT'))
+    const mortCount = isMort.filter(Boolean).length
+    const nbActifs = Math.max(1, players.length - mortCount)
+    // Apply user preference X2/X3 only when exactly 1 Mort is present
+    try {
+      const pref = (typeof localStorage !== 'undefined') ? localStorage.getItem('tarot_morts_divisor') : null
       if (mortCount === 1) {
-        try {
-          const pref = (typeof localStorage !== 'undefined') ? localStorage.getItem('tarot_morts_divisor') : null
-          const val = pref ? parseInt(pref, 10) : 2
-          return (val === 2 || val === 3) ? val : 2
-        } catch (e) {
-          return 2
-        }
+        if (pref === '3') return 3
+        if (pref === '2') return 2
       }
-      return 3
-    }
-    if (typeof playersOrSize === 'number') return 3
-  } catch (e) {}
-  return 3
+    } catch (_e) {}
+
+    const nbDefenseurs = Math.max(1, nbActifs - 1)
+    return nbDefenseurs
+  }
+  const tableSize = Number(playersOrSize || 0)
+  // For numeric table sizes use the standard rule: defenders = 3 for any
+  // tableSize >= 3. Fallback to nbActifs-1 for smaller sizes.
+  if (tableSize >= 3) return 3
+  return Math.max(1, tableSize - 1)
 }
 
-    // Lucky draw handler (attached to btn-lucky-draw)
-    async function handleLuckyDrawClick (ev) {
-      try {
-        const btn = (ev && ev.target) ? ev.target.closest('#btn-lucky-draw') : document.getElementById('btn-lucky-draw')
-        const dateIso = (inputDateTournoi && inputDateTournoi.value) ? inputDateTournoi.value : getTodayIso()
-        const scores = await getScoresTournoi()
-        if (!scores.length) {
-          // Visual feedback so user knows the handler ran but there's no data to act on
-          try {
-            btn.classList.add('lucky-no-data')
-            const note = document.getElementById('manual-entry-note')
-            if (note) {
-              note.textContent = 'Aucun joueur actif pour cette date — composez la liste ou changez la date.'
-              note.classList.remove('hidden')
-              setTimeout(() => { try { note.classList.add('hidden'); note.textContent = '' } catch (_e) {} }, 2000)
-            }
-            setTimeout(() => { try { btn.classList.remove('lucky-no-data') } catch (_e) {} }, 900)
-          } catch (_e) {}
-          return
-        }
-        if (!rewardedPlayersByDate[dateIso]) rewardedPlayersByDate[dateIso] = new Set()
-        const rewarded = rewardedPlayersByDate[dateIso]
+function showValidationBubble (targetEl, message, timeout = 2200) {
+  try {
+    if (!targetEl || !targetEl.getBoundingClientRect) return
+    const existing = targetEl.__validationBubble
+    if (existing && existing.parentNode) {
+      existing.innerHTML = '⚠️ ' + message
+      existing.classList.remove('fade-out')
+      clearTimeout(existing.__removeTimer)
+      clearTimeout(existing.__fadeTimer)
+      existing.__fadeTimer = setTimeout(() => { try { existing.classList.add('fade-out') } catch (_e) {} }, timeout - 300)
+      existing.__removeTimer = setTimeout(() => { try { existing.remove(); targetEl.__validationBubble = null } catch (_e) {} }, timeout)
+      return
+    }
+    const rect = targetEl.getBoundingClientRect()
+    const bubble = document.createElement('div')
+    bubble.className = 'validation-bubble'
+    bubble.innerHTML = '⚠️ ' + message
+    document.body.appendChild(bubble)
+    // position: try above the input, fallback below
+    const br = bubble.getBoundingClientRect()
+    let left = Math.round(rect.left + (rect.width - br.width) / 2)
+    if (left < 8) left = 8
+    if (left + br.width > window.innerWidth - 8) left = window.innerWidth - br.width - 8
+    let top = Math.round(rect.top - br.height - 10)
+    if (top < 8) {
+      top = Math.round(rect.bottom + 10)
+      bubble.classList.add('arrow-top')
+    } else {
+      bubble.classList.add('arrow-bottom')
+    }
+    bubble.style.left = left + 'px'
+    bubble.style.top = top + 'px'
+    bubble.__fadeTimer = setTimeout(() => { try { bubble.classList.add('fade-out') } catch (_e) {} }, timeout - 300)
+    bubble.__removeTimer = setTimeout(() => { try { bubble.remove(); targetEl.__validationBubble = null } catch (_e) {} }, timeout)
+    targetEl.__validationBubble = bubble
+  } catch (e) { /* ignore */ }
+}
 
-        let placesForDate = []
-        try { placesForDate = await computeRedistribPlacesFor(dateIso, scores.length) } catch (e) { placesForDate = [] }
+// (function moved below — see navigation section) // original definition removed here to avoid duplication.
+
+
+
+async function handleLuckyDrawClick (ev) {
+  const btn = (ev && ev.target && ev.target.closest) ? ev.target.closest('#btn-lucky-draw') : document.getElementById('btn-lucky-draw')
+  if (!btn) return
+
+  // quick visual acknowledgement so user can see the click reached the handler
+  try {
+    btn.classList.add('lucky-click-flash')
+    setTimeout(() => { try { btn.classList.remove('lucky-click-flash') } catch (_e) {} }, 320)
+  } catch (_e) {}
+
+  // keep the same logic as the original handler
+  try {
+    const dateIso = (inputDateTournoi && inputDateTournoi.value) ? inputDateTournoi.value : getTodayIso()
+
+    // Prevent concurrent / duplicate runs for the same date (fixes double-winner issue).
+    if (luckyDrawInProgress.has(dateIso)) return
+    luckyDrawInProgress.add(dateIso)
+
+    // clear any in-memory previous lucky/reward state for a fresh run
+    delete luckyWinnerByDate[dateIso]
+    delete rewardedPlayersByDate[dateIso]
+    try {
+      if (typeof tbodySoiree !== 'undefined' && tbodySoiree) {
+        Array.from(tbodySoiree.querySelectorAll('.col-gain .gain-lucky, .col-gain .gain-rewarded')).forEach(el => el.remove())
+      }
+    } catch (_e) {}
+
+    let scores = (await getScoresTournoi()).filter(r => !String(r[0] || '').toUpperCase().startsWith('MORT'))
+    const manualModeActive = !!(cbManualEntry && cbManualEntry.checked)
+    if (!scores.length) {
+      if (Array.isArray(listeTournoi) && listeTournoi.length) {
+        scores = listeTournoi.filter(n => n && !String(n).toUpperCase().startsWith('MORT')).map(n => [n])
+      } else if (Array.isArray(dernierFullTirage) && dernierFullTirage.length > 0) {
+        const previewList = dernierFullTirage.map(p => p.nom).filter(n => n && !String(n).toUpperCase().startsWith('MORT'))
+        if (previewList.length) {
+          scores = previewList.map(n => [n])
+          try {
+            if (tbodySoiree && tbodySoiree.querySelectorAll('tr').length === 0) {
+              const frag = document.createDocumentFragment()
+              previewList.forEach((nm, i) => {
+                const tr = document.createElement('tr')
+                tr.dataset.nom = encodeURIComponent(nm)
+                tr.dataset.temp = '1'
+                tr.innerHTML = `<td class="col-rang">${i + 1}</td><td class="col-joueur">${nm}</td><td class="col-total"></td><td class="col-gain"></td>`
+                frag.appendChild(tr)
+              })
+              tbodySoiree.appendChild(frag)
+            }
+          } catch (_e) {}
+        }
+      } else if (manualModeActive) {
+        scores = (listeTournoi || []).filter(n => n && !String(n).toUpperCase().startsWith('MORT')).map(n => [n])
+      } else {
+        // NEW: fallback to the general players list so "Tirage chanceux" works
+        // even if no full tirage / no listeTournoi has been created yet.
+        try {
+          const gen = await loadListeJoueurs()
+          if (Array.isArray(gen) && gen.length) {
+            const genActive = gen.filter(n => n && !String(n).toUpperCase().startsWith('MORT'))
+            if (genActive.length) {
+              scores = genActive.map(n => [n])
+              try {
+                if (tbodySoiree && tbodySoiree.querySelectorAll('tr').length === 0) {
+                  const frag = document.createDocumentFragment()
+                  genActive.forEach((nm, i) => {
+                    const tr = document.createElement('tr')
+                    tr.dataset.nom = encodeURIComponent(nm)
+                    tr.dataset.temp = '1'
+                    tr.innerHTML = `<td class="col-rang">${i + 1}</td><td class="col-joueur">${nm}</td><td class="col-total"></td><td class="col-gain"></td>`
+                    frag.appendChild(tr)
+                  })
+                  tbodySoiree.appendChild(frag)
+                }
+              } catch (_e) {}
+
+              // Persist temporary scores so subsequent renders (renderFeuilleSoiree)
+              // and other helpers see the active list even without a prior tirage.
+              try { await setScoresTournoi(scores) } catch (_e) {}
+            }
+          }
+        } catch (_e) {}
+      }
+    }
+
+    if (!scores.length) {
+      // Visual feedback so user knows the handler ran but there's no data to act on
+      try {
+        btn.classList.add('lucky-no-data')
+        const note = document.getElementById('manual-entry-note')
+        if (note) {
+          note.textContent = 'Aucun joueur actif pour cette date — composez la liste ou changez la date.'
+          note.classList.remove('hidden')
+          setTimeout(() => { try { note.classList.add('hidden'); note.textContent = '' } catch (_e) {} }, 2000)
+        }
+        setTimeout(() => { try { btn.classList.remove('lucky-no-data') } catch (_e) {} }, 900)
+      } catch (_e) {}
+      return
+    }
+
+    if (!rewardedPlayersByDate[dateIso]) rewardedPlayersByDate[dateIso] = new Set()
+    const rewarded = rewardedPlayersByDate[dateIso]
+
+    let placesForDate = []
+    try { placesForDate = await computeRedistribPlacesFor(dateIso, scores.length) } catch (e) { placesForDate = [] }
 
     const sortedByTotal = [...scores].sort((a, b) => {
       const aVals = a.slice(1).map(Number); const aTotal = aVals.length ? aVals[aVals.length - 1] : 0
@@ -897,38 +1008,37 @@ if (nbPartiesParMancheInput) {
 const rotationsResultDiv = document.getElementById('rotations-result')
 const btnQuitter = document.getElementById('btn-quitter')
 
-// Always present a Quit button in the header. In Electron it calls the
-// native quit handler; in a browser it attempts to close the window or
-// shows a fallback message if that isn't permitted.
-if (btnQuitter) {
+if (!window.electronAPI) {
+  // --- Mode web (tablette) : plein écran au premier geste ---
+  let fsRequested = false
+  const tryFullscreen = () => {
+    if (!fsRequested && !document.fullscreenElement) {
+      fsRequested = true
+      document.documentElement.requestFullscreen().catch(() => { fsRequested = false })
+    }
+  }
+  // Un seul essai au premier toucher — n'interfère pas avec les boutons
+  document.addEventListener('touchstart', tryFullscreen, { once: true, passive: true })
+
+  if (btnQuitter) {
+    // Bouton bascule plein écran (pas quitter — on est en mode web)
+    btnQuitter.title = 'Plein écran'
+    btnQuitter.textContent = '🔲'
+    btnQuitter.addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {})
+      } else {
+        document.exitFullscreen().catch(() => {})
+      }
+    })
+  }
+} else if (btnQuitter) {
   btnQuitter.title = 'Quitter'
   btnQuitter.textContent = '❌'
   btnQuitter.addEventListener('click', () => {
-    try {
-      if (window.electronAPI && window.electronAPI.quitApp) {
-        window.electronAPI.quitApp()
-        return
-      }
-    } catch (_e) { /* ignore */ }
-
-    // 1) Try direct close()
-    try { window.close() } catch (_e) {}
-
-    // 2) If not closed, try open self then close (works in some browsers)
-    setTimeout(() => {
-      try {
-        const w = window.open('', '_self')
-        if (w) { try { w.close() } catch (_e) {} ; return }
-      } catch (_e) {}
-
-      // 3) As a last resort navigate to a blank page to at least leave the app UI
-      try { window.location.href = 'about:blank' } catch (_e) {}
-
-      // 4) Final fallback: inform the user they must close manually
-      setTimeout(() => {
-        try { showAlert("Impossible de quitter depuis le navigateur. Fermez l'onglet ou la fenêtre manuellement.") } catch (_e) {}
-      }, 300)
-    }, 200)
+    if (window.electronAPI && window.electronAPI.quitApp) {
+      window.electronAPI.quitApp()
+    }
   })
 }
 
@@ -1061,7 +1171,24 @@ try { if (cbSerpentin) cbSerpentin.checked = !!localStorage.getItem('tarot_serpe
 if (cbSerpentin) cbSerpentin.addEventListener('change', () => { try { localStorage.setItem('tarot_serpentin', cbSerpentin.checked ? '1' : '') } catch (_e) {} })
 // Normal table-based "feuille" mode removed — use the Saisie UI (renderSaisie) and #container-saisie
 
-// (Removed) previous check for missing players before allowing rotation selection.
+// helper: return array of player names that lack a total for the previous
+// rotation index. used only for user feedback when a disabled option is
+// clicked. if tournament scores are unavailable we return an empty list.
+async function computeMissingPlayersForRotation (rotationIdx) {
+  if (rotationIdx <= 0) return []
+  try {
+    const scores = await getScoresTournoi()
+    const prevIdx = rotationIdx - 1
+    return (listeTournoi || []).filter(nomJoueur => {
+      const row = findRowByName(scores, nomJoueur)
+      // We consider a total present when the row has at least prevIdx+2 items
+      // (name + score for each rotation up to prevIdx) – zero counts as value.
+      return !(row && row.length >= prevIdx + 2)
+    })
+  } catch (_e) {
+    return []
+  }
+}
 
 // Listeners pour les selects
 if (selectRotation) selectRotation.addEventListener('change', async () => {
@@ -1071,7 +1198,20 @@ if (selectRotation) selectRotation.addEventListener('change', async () => {
   const index = selectRotation.selectedIndex
   const option = selectRotation.options[index]
 
-  // Removed check that required all players to have scores before allowing rotation change.
+  // always compute any missing players so we can warn, even if we no longer block selection
+  let missingArr = []
+  try { missingArr = await computeMissingPlayersForRotation(index) } catch (_e) {}
+  if (missingArr.length) {
+    const missingMsg = missingArr.join(', ')
+    if (option && option.disabled) {
+      // old-style alert when rotation still locked
+      showAlert(`Cette rotation n'est pas encore accessible.\nJoueurs n'ayant pas fini la manche précédente :\n${missingMsg}`)
+      return
+    } else {
+      // warn user but allow the selection
+      showAlert(`Joueurs n'ayant pas fini la manche précédente :\n${missingMsg}`)
+    }
+  }
   if (option && option.disabled) {
     // still bail out if somehow disabled (shouldn't happen normally)
     return
@@ -1200,10 +1340,6 @@ export let dernierDictRotations = null
 
 // utility for tests: allow resetting rotation data
 export function setDernierDictRotations(val) { dernierDictRotations = val; }
-
-// Toggle to allow editing of a validated manche snapshot (disabled by default)
-// Enable editing of validated manches by default (no banner/button shown)
-let validatedEditMode = true
 
 // Guard for concurrent Saisie renders
 let _renderingSaisieLock = false
@@ -1699,14 +1835,6 @@ function getMode () {
   try {
     return localStorage.getItem('tarot_mode') || 'normal'
   } catch (_e) { return 'normal' }
-}
-
-// Helper: read mortal divisor preference (2 or 3) from localStorage
-function getMortsDivisor () {
-  try {
-    const v = Number(localStorage.getItem('morts_divisor'))
-    return (v === 2 || v === 3) ? v : null
-  } catch (_e) { return null }
 }
 
 // Toast non-bloquant (top-right)
@@ -2799,39 +2927,11 @@ async function mettreAJourSelectRotationsEtTables () {
 
   // previous gating removed - all rotations selectable immediately.
   const scores = await getScoresTournoi()
-  // In exclu mode we will disable selection of already-validated manches.
-  const inExcluMode = (typeof getMode === 'function' && getMode() === 'exclu')
-  let lockedIndices = new Set()
-  if (inExcluMode) {
-    try {
-      const persistedTables = await getScoresParTable() || []
-      persistedTables.forEach(t => {
-        if (t && Array.isArray(t.parties)) {
-          t.parties.forEach((p, idx) => { if (p && p.locked) lockedIndices.add(idx) })
-        }
-      })
-    } catch (_e) { lockedIndices = new Set() }
-  }
-  // Also consider validated snapshots stored in localStorage (`validated_manches_data`).
-  // Some validation flows mark locks in the saved snapshot rather than in scores_par_table.
-  try {
-    const allSnaps = JSON.parse(localStorage.getItem('validated_manches_data') || '{}')
-    Object.keys(allSnaps || {}).forEach((rot) => {
-      const snapTables = allSnaps[rot] || []
-      snapTables.forEach(t => {
-        if (t && Array.isArray(t.parties)) {
-          t.parties.forEach((p, idx) => { if (p && p.locked) lockedIndices.add(idx) })
-        }
-      })
-    })
-  } catch (_e) { /* ignore snapshot read errors */ }
   let indexASelectionner = 0
   let foundFirstIncomplete = false
 
   const optionsHtml = nomsRotations.map((nom, index) => {
-    // By default selectable, but if in exclu mode and this manche index
-    // is locked somewhere, mark option inaccessible.
-    const accessible = !(inExcluMode && lockedIndices.has(index))
+    const accessible = true
     const missing = []
 
     if (!foundFirstIncomplete) {
@@ -2901,20 +3001,15 @@ async function validateAndPersistTable (tData, tblEl, mancheIndex = -1) {
 
       let rowScores = new Array(tableSize).fill(0)
       if (filled.length === 0) {
-        // Preserve previous behavior for 5-player tables (pre-filled zeros).
-        // For other table sizes, keep values as `null` so inputs stay empty
-        // instead of showing spurious "0" entries when nothing was entered.
-        if (tableSize === 5) rowScores = new Array(tableSize).fill(0)
-        else rowScores = new Array(tableSize).fill(null)
+        rowScores = new Array(tableSize).fill(0)
       } else if (filled.length === 1) {
         const attackerInput = filled[0]
         const attackerVal = Number(attackerInput.value)
         const attackerCol = Number(attackerInput.dataset.colIdx || 0)
         const validationArg = (Array.isArray(tData.players) && tData.players.some(p => String(p || '').toUpperCase().startsWith('MORT'))) ? tData.players : tableSize
-        const mortDiv = (getMode && getMode() === 'morts') ? getMortsDivisor() : null
-        if (!validateAttackerDivisibility(attackerVal, validationArg, mortDiv)) {
+        if (!validateAttackerDivisibility(attackerVal, validationArg)) {
           // Show explanatory bubble and skip persisting this table for now
-          const div = (mortDiv && (mortDiv === 2 || mortDiv === 3)) ? mortDiv : getRequiredDivisor(validationArg)
+          const div = getRequiredDivisor(validationArg)
           try { showValidationBubble(attackerInput, `Valeur invalide — multiple de ${div} requis`) } catch (_e) {}
           try { attackerInput.focus(); attackerInput.select() } catch (_e) {}
           // mark as not fully filled so persistence won't transfer
@@ -2926,9 +3021,9 @@ async function validateAndPersistTable (tData, tblEl, mancheIndex = -1) {
         inputs.forEach((inp, idx) => {
           if (inp.disabled) exemptIndices.add(idx)
         })
-        rowScores = placeAttackerAtIndex(attackerVal, validationArg, attackerCol, exemptIndices, mortDiv)
+        rowScores = placeAttackerAtIndex(attackerVal, validationArg, attackerCol, exemptIndices)
       } else {
-        for (let c = 0; c < tableSize; c++) rowScores[c] = (inputs[c] && inputs[c].value !== '') ? Number(inputs[c].value) : null
+        for (let c = 0; c < tableSize; c++) rowScores[c] = inputs[c] && inputs[c].value !== '' ? Number(inputs[c].value) : 0
       }
 
       // Zero out Morts
@@ -2944,7 +3039,7 @@ async function validateAndPersistTable (tData, tblEl, mancheIndex = -1) {
         const inp = inputs[c]
         if (!inp || inp.disabled) continue
         const v = rowScores[c]
-        inp.value = (v === null || v === undefined) ? '' : String(v)
+        inp.value = (v === 0 || v === null || v === undefined) ? '' : String(v)
       }
 
       // accumulate totals
@@ -2976,10 +3071,15 @@ async function validateAndPersistTable (tData, tblEl, mancheIndex = -1) {
       console.warn('Erreur synchronisation totaux vers scores_tournoi', e)
     }
 
+    // if we transferred, mark this manche locked both in model and visually
     if (transferForThisTable && mancheIndex !== -1 && partiesEls[mancheIndex]) {
+      // note the lock in the data so future renders honor it
       tData.parties = tData.parties || []
+      // ensure an entry exists for this manche
       if (!tData.parties[mancheIndex]) tData.parties[mancheIndex] = {}
-      // intentionally do NOT set `locked` here; inputs should remain editable
+      tData.parties[mancheIndex].locked = true
+      const inputs = Array.from(partiesEls[mancheIndex].querySelectorAll('input'))
+      inputs.forEach(inp => inp.readOnly = true)
     }
 
     try { await renderFeuilleSoiree() } catch (_e) {}
@@ -2995,21 +3095,6 @@ async function validateAndPersistTable (tData, tblEl, mancheIndex = -1) {
 // Module-level: perform the global "Valider manche" flow (reusable by header + UI)
 async function performGlobalValidateManche () {
   try {
-    // If in 'exclu' mode, prevent validating a manche that's already locked
-    try {
-      const inExcluMode = (typeof getMode === 'function' && getMode() === 'exclu')
-      if (inExcluMode) {
-        const currentIdx = (selectRotation && typeof selectRotation.selectedIndex === 'number') ? selectRotation.selectedIndex : 0
-        try {
-          const persisted = await getScoresParTable() || []
-          const anyLocked = (persisted || []).some(t => Array.isArray(t.parties) && t.parties[currentIdx] && t.parties[currentIdx].locked)
-          if (anyLocked) {
-            showAlert("En mode 'exclu', vous ne pouvez pas re-valider une manche déjà validée.")
-            return
-          }
-        } catch (_e) { /* ignore persistence errors and continue */ }
-      }
-    } catch (_e) { /* ignore */ }
     // Vérifier que tous les joueurs ont un total non nul (au moins un score saisi ou calculé)
     const allCards = Array.from((containerSaisie || document).querySelectorAll('.fast-table-card'))
     const joueursManquants = []
@@ -3089,25 +3174,11 @@ async function performGlobalValidateManche () {
     // allow persistence to settle
     await new Promise(r => setTimeout(r, 100))
 
-    // Save validated manche snapshot for future review. Mark the current
-    // manche as `locked` in the snapshot so renderSaisie can detect it.
+    // Save validated manche snapshot for future review
     try {
       const nomRotSnap = selectRotation && selectRotation.value
       const snapshotTables = await getScoresParTable() || []
-      if (nomRotSnap) {
-        try {
-          // mark locked only when the manche contains fully-filled scores
-          snapshotTables.forEach((t) => {
-            if (t && Array.isArray(t.parties) && t.parties[currentIdx]) {
-              const sc = t.parties[currentIdx].scores || []
-              if (sc.length && sc.every(v => v !== null && v !== undefined)) {
-                // snapshot contains fully-filled scores; do not mark as locked
-              }
-            }
-          })
-        } catch (_e) { /* ignore */ }
-        saveValidatedMancheSnapshot(nomRotSnap, snapshotTables)
-      }
+      if (nomRotSnap) saveValidatedMancheSnapshot(nomRotSnap, snapshotTables)
     } catch (_e) { /* ignore */ }
 
     // Clear the next manche for all tables
@@ -3119,28 +3190,33 @@ async function performGlobalValidateManche () {
       await setScoresParTable(cleared)
     } catch (e) { console.warn('clear next manche (legacy UI) failed', e) }
 
-    // Correction : toujours transférer les scores de la manche validée vers scores_tournoi
-    try {
-      const persistedAfterLoop = await getScoresParTable() || []
-      const nbPartiesMax = Number(nbPartiesInput.value || 4)
-      for (const t of persistedAfterLoop) {
-        if (t && Array.isArray(t.parties) && t.parties[currentIdx]) {
-          const sc = t.parties[currentIdx].scores || []
-          if (sc.length && sc.every(v => v !== null && v !== undefined)) {
-            // compute feuille from totals, même logique que validateAndPersistTable
-            const feuille = (t.players || []).map((nom, i) => [nom, t.totals[i], t.totals[i]])
-            try {
-              let scoresSoiree = await getScoresTournoi()
-              const newScores = applyFeuilleToScoresSoiree(scoresSoiree, feuille, nbPartiesMax, currentIdx)
-              await setScoresTournoi(newScores)
-              anyTransfer = true
-            } catch (e) {
-              console.warn('transfert scoresTournoi échoué', e)
+    // fallback: if no transfer occurred but persisted tables show the current
+    // manche fully filled, perform the tournament score transfer ourselves.
+    if (!anyTransfer) {
+      try {
+        const persistedAfterLoop = await getScoresParTable() || []
+        const nbPartiesMax = Number(nbPartiesInput.value || 4)
+        for (const t of persistedAfterLoop) {
+          if (t && Array.isArray(t.parties) && t.parties[currentIdx]) {
+            const sc = t.parties[currentIdx].scores || []
+            if (sc.length && sc.every(v => v !== null && v !== undefined)) {
+              // compute feuille from totals, same as in validateAndPersistTable
+              const feuille = (t.players || []).map((nom, i) => [nom, t.totals[i], t.totals[i]])
+              try {
+                let scoresSoiree = await getScoresTournoi()
+                const newScores = applyFeuilleToScoresSoiree(scoresSoiree, feuille, nbPartiesMax, currentIdx)
+                await setScoresTournoi(newScores)
+                anyTransfer = true
+                // once we've transferred one table, additional tables can also
+                // be merged but we simply continue the loop so each will be applied
+              } catch (e) {
+                console.warn('fallback transfer to scoresTournoi failed', e)
+              }
             }
           }
         }
-      }
-    } catch (_e) { /* ignore fallback errors */ }
+      } catch (_e) { /* ignore fallback errors */ }
+    }
 
     // Snapshot AFTER
     let afterTables = await snapshotSafe(getScoresParTable) || []
@@ -3301,68 +3377,11 @@ async function renderSaisieParTable () {
     // Check if this rotation has a validated snapshot (past manche review)
     const validatedSnapshot = loadValidatedMancheSnapshot(nomRot)
     const isValidatedManche = !!validatedSnapshot
-    // If a validated snapshot exists, use it as the display base. When
-    // `validatedEditMode` is false the view will be read-only; when true the
-    // same snapshot is used but inputs are editable so users can adjust values.
+
     if (isValidatedManche) {
-      try { normalizedTables = JSON.parse(JSON.stringify(validatedSnapshot)) } catch (_e) { normalizedTables = validatedSnapshot }
+      // Use the validated snapshot for display (read-only)
+      normalizedTables = validatedSnapshot
     }
-    const isValidatedMancheView = isValidatedManche && !validatedEditMode
-
-    // Récupérer les exclus (liste par manche) pour cette rotation
-    let exclusArr = []
-    try { exclusArr = (await getExclusTournoi()) || [] } catch (_e) { exclusArr = [] }
-
-    // Afficher un bandeau informatif si on est en mode 'exclu' et qu'il existe
-    // au moins une manche validée (repérée par `part.locked`). On ignore la
-    // manche courante (`selIdxTop`) pour ne pas bloquer l'édition en cours.
-    try {
-      const inExcluModeTop = (typeof getMode === 'function' && getMode() === 'exclu')
-      const selIdxTop = (selectRotation && typeof selectRotation.selectedIndex === 'number') ? selectRotation.selectedIndex : 0
-      // réutiliser `exclusArr` défini plus haut
-      const exclusArrTop = exclusArr || []
-      if (inExcluModeTop) {
-        let hasValidated = false
-        try {
-          const persisted = tablesData || []
-          for (const t of persisted) {
-            if (t && Array.isArray(t.parties)) {
-              for (let idx = 0; idx < t.parties.length; idx++) {
-                if (idx === selIdxTop) continue
-                const p = t.parties[idx]
-                if (p && p.locked) { hasValidated = true; break }
-              }
-            }
-            if (hasValidated) break
-          }
-        } catch (_e) { /* ignore */ }
-        if (!hasValidated && validatedSnapshot) {
-          try {
-            for (const t of (validatedSnapshot || [])) {
-              if (t && Array.isArray(t.parties)) {
-                for (let idx = 0; idx < t.parties.length; idx++) {
-                  if (idx === selIdxTop) continue
-                  const p = t.parties[idx]
-                  if (p && p.locked) { hasValidated = true; break }
-                }
-              }
-              if (hasValidated) break
-            }
-          } catch (_e) { /* ignore */ }
-        }
-        if (hasValidated) {
-          const banner = document.createElement('div')
-          banner.className = 'exclu-validated-banner'
-          banner.textContent = "Modification de manche validée impossible en mode exclu"
-          banner.style.padding = '8px 12px'
-          banner.style.background = '#8b0000'
-          banner.style.color = '#fff'
-          banner.style.marginBottom = '8px'
-          banner.style.borderRadius = '4px'
-          try { containerSaisie.appendChild(banner) } catch (_e) {}
-        }
-      }
-    } catch (_e) { /* ignore */ }
 
     // if the rotation key changed since last render, wipe every table completely
     // (similar to clicking the trash icon) so old scores cannot leak into a
@@ -3436,7 +3455,13 @@ async function renderSaisieParTable () {
       }
     } catch (_e) {}
 
-    // (validated snapshot is used as base; editing is allowed directly)
+    // Show a banner when reviewing a validated (past) manche
+    if (isValidatedManche) {
+      const banner = document.createElement('div')
+      banner.style.cssText = 'padding:8px 16px;background:#2a5d2a;color:#c8f7c8;border-radius:6px;margin-bottom:10px;text-align:center;font-weight:600;font-size:14px;'
+      banner.textContent = '\u2714 Manche valid\u00e9e \u2014 scores en lecture seule'
+      containerSaisie.appendChild(banner)
+    }
 
     normalizedTables.forEach((tData) => {
       const divTable = document.createElement('div')
@@ -3453,7 +3478,7 @@ async function renderSaisieParTable () {
       title.style.margin = '0 0 10px 0'
       title.style.textAlign = 'center'
       // add trash icon for clearing this table (replaces reset button)
-      if (!isValidatedManche || validatedEditMode) {
+      if (!isValidatedManche) {
       const trashIcon = document.createElement('span')
       trashIcon.className = 'btn-trash'
       trashIcon.textContent = '🗑︎'
@@ -3527,18 +3552,6 @@ async function renderSaisieParTable () {
 
         const tableSize = tData.players.length
 
-        // Determine whether this particular partie (manche) is considered
-        // validated. We treat a manche as validated when any of the following
-        // holds:
-        // - the model already contains `part.locked` (legacy)
-        // - the validated snapshot for this rotation contains fully-filled scores
-        // - the persisted `scores_par_table` entry for this table contains
-        //   fully-filled scores for this manche
-        const persistedTablesForRender = tablesData || []
-        const snapshotTablesForRender = validatedSnapshot || []
-        const findPersistedEntry = (tblId) => (persistedTablesForRender || []).find(x => Number(x.table) === Number(tblId))
-        const findSnapshotEntry = (tblId) => (snapshotTablesForRender || []).find(x => Number(x.table) === Number(tblId))
-
         // Helper: recompute and refresh Totaux display from `tData.parties`
         const updateTotalsDisplay = () => {
           try {
@@ -3575,10 +3588,9 @@ async function renderSaisieParTable () {
           const attackerCol = Number(attackerInput.dataset.colIdx || 0)
 
           const validationArg = (Array.isArray(tData.players) && tData.players.some(p => String(p || '').toUpperCase().startsWith('MORT'))) ? tData.players : tableSize
-          const mortDiv = (getMode && getMode() === 'morts') ? getMortsDivisor() : null
-          if (!validateAttackerDivisibility(attackerVal, validationArg, mortDiv)) {
+          if (!validateAttackerDivisibility(attackerVal, validationArg)) {
             // invalid divisibility — show bubble and do not compute defenders
-            const div = (mortDiv && (mortDiv === 2 || mortDiv === 3)) ? mortDiv : getRequiredDivisor(validationArg)
+            const div = getRequiredDivisor(validationArg)
             try { showValidationBubble(attackerInput, `Valeur invalide — multiple de ${div} requis`) } catch (_e) {}
             try { attackerInput.focus(); attackerInput.select() } catch (_e) {}
             return
@@ -3595,8 +3607,7 @@ async function renderSaisieParTable () {
               }
             }
           })
-          const mortDivLocal = (getMode && getMode() === 'morts') ? getMortsDivisor() : null
-          let rowScores = placeAttackerAtIndex(attackerVal, validationArg, attackerCol, exemptIndices, mortDivLocal)
+          let rowScores = placeAttackerAtIndex(attackerVal, validationArg, attackerCol, exemptIndices)
           // Zero out Morts
           for (let c = 0; c < tableSize; c++) {
             const pname = tData.players[c] || ''
@@ -3636,18 +3647,8 @@ async function renderSaisieParTable () {
         const dealerOrder = [0,3,1,2,4]
         const isFive = tableSize === 5
         const dealerIdx = isFive ? dealerOrder[partIdx % 5] : -1
-        // Selected manche index (used to restrict edits in 'exclu' mode)
-        const selIdx = (selectRotation && typeof selectRotation.selectedIndex === 'number') ? selectRotation.selectedIndex : 0
-        // Compute exclu mode once per table render
-        const inExcluMode = (typeof getMode === 'function' && getMode() === 'exclu')
 
         part.scores.forEach((cellVal, colIdx) => {
-          const snapshotEntry = findSnapshotEntry(tData.table)
-          const persistedEntry = findPersistedEntry(tData.table)
-          // A manche is considered validated only when the explicit `locked`
-          // flag is present (set by the validation checkbox). Ignore the
-          // currently edited manche (`selIdx`) so it stays editable.
-          let partIsValidated = !!(part && part.locked) && partIdx !== selIdx
           const td = document.createElement('td')
           td.style.padding = '1px'
           td.style.textAlign = 'center'
@@ -3676,13 +3677,15 @@ async function renderSaisieParTable () {
             td.classList.add('dealer-cell')
           }
 
-            // locked flag indicates the manche has been validated; enforcement
-            // is handled below with awareness of the excluded player.
-          
+            // locked flag indicates the manche has been validated; keep it frozen
+          if (part && part.locked) {
+            inp.readOnly = true
+            // locks take precedence: even if disabled by index, allow focus for review
+            inp.disabled = false
+          }
 
-          // Validated manche view: inputs read-only for review unless user
-          // toggled edit mode (isValidatedMancheView === true => read-only)
-          if (isValidatedManche && !validatedEditMode) {
+          // Validated manche: all inputs read-only for review
+          if (isValidatedManche) {
             inp.readOnly = true
             inp.style.opacity = '0.85'
           }
@@ -3697,39 +3700,8 @@ async function renderSaisieParTable () {
             }
           } catch (_e) {}
 
-          // Simplified exclu rule: in 'exclu' mode any already-validated
-          // manche (`part.locked`) is not editable. Show an alert on focus.
-          if (inExcluMode && partIsValidated) {
-            // Allow the excluded player's seat for this manche to remain editable
-            // (we may need to enter a score for the excluded player). Determine
-            // the excluded name for this manche and compare against the player
-            // at this seat.
-            try {
-              const excluNom = (exclusArr && exclusArr[partIdx]) || null
-              const playerName = (tData.players && tData.players[colIdx]) || ''
-              const isExcluSeat = excluNom && String(excluNom) === String(playerName)
-              if (!isExcluSeat) {
-                inp.readOnly = true
-                inp.disabled = true
-                inp.addEventListener('focus', () => {
-                  showAlert("En mode 'exclu' vous ne pouvez pas corriger les manches déjà validées.")
-                  try { inp.blur() } catch (_e) {}
-                })
-              } else {
-                // ensure excluded seat remains editable
-                inp.readOnly = false
-                inp.disabled = false
-              }
-            } catch (_e) {
-              inp.readOnly = true
-              inp.disabled = true
-            }
-          }
-
           // When the value changes, clear other cells in the row then compute
-          // allow changes when NOT in validated read-only view (i.e. either
-          // normal mode or validatedEditMode === true)
-          if (!(isValidatedManche && !validatedEditMode) && !(inExcluMode && partIsValidated)) {
+          if (!isValidatedManche) {
           inp.onchange = async (ev) => {
             const rowInputs = Array.from(tr.querySelectorAll('input'))
             rowInputs.forEach((ri) => {
@@ -3924,14 +3896,13 @@ async function ensureExcluHasScoreForManche (indexRot) {
       manches = []
     }
 
-    // If manche already exists and is exactly 180, nothing to change.
-    // Otherwise we (re)assign 180 for the excluded player for this manche
-    // so revalidation will always ensure the 180 points are present.
-    while (manches.length < indexRot) manches.push(0)
-    if (manches.length >= indexRot + 1 && Number(manches[indexRot]) === 180) {
+    if (manches.length >= indexRot + 1) {
+      // Déjà présent, rien à faire
       return false
     }
-    // (re)assign 180 to the target manche
+
+    while (manches.length < indexRot) manches.push(0)
+    // Attribuer 180 à la manche cible
     manches[indexRot] = 180
     const total = manches.reduce((a, b) => a + b, 0)
     const nouvelleLigne = [excluNom, ...manches, total]
@@ -3991,6 +3962,7 @@ btnTirage.addEventListener('click', async () => {
         try { showToast(`Ajout limité à ${aAjouter} Mort(s) (max 3)`) } catch (_e) {}
       }
 
+      // Proposition des options en une seule boîte
       const message = `Le nombre de joueurs (${listeTournoi.length}) n'est pas un multiple de 4.\n\nChoisissez une option :`
       const buttons = []
       buttons.push(`Ajouter ${aAjouter} "Mort(s)" (X3)`)
@@ -4003,18 +3975,21 @@ btnTirage.addEventListener('click', async () => {
       if (choice === -1) return // cancelled via overlay
       const selected = buttons[choice]
 
-        if (selected && selected.startsWith('Ajouter')) { // Ajouter morts (avec choix X2/X3)
-          // determine divisor from label and persist preference
-          const divisor = selected.includes('X2') ? 2 : 3
-          try { localStorage.setItem('tarot_morts_divisor', String(divisor)) } catch (_e) {}
-          for (let i = 0; i < aAjouter; i++) {
-            let k = 1
-            while (listeTournoi.some((n) => n && String(n).toUpperCase() === `MORT ${k}`)) k++
-            listeTournoi.push(`Mort ${k}`)
+      if (selected && selected.startsWith('Ajouter')) { // Ajouter morts
+        for (let i = 0; i < aAjouter; i++) {
+          let k = 1
+          while (
+            listeTournoi.some((n) => n && String(n).toUpperCase() === `MORT ${k}`)
+          ) {
+            k++
           }
-          // Marquer le mode de jeu explicitement comme 'morts'
-          setMode('morts')
-          renderListeTournoi()
+          listeTournoi.push(`Mort ${k}`)
+        }
+        try { if (selected.includes('(X3)')) localStorage.setItem('tarot_morts_divisor', '3') } catch (_e) {}
+        try { if (selected.includes('(X2)')) localStorage.setItem('tarot_morts_divisor', '2') } catch (_e) {}
+        // Marquer le mode de jeu explicitement comme 'morts'
+        setMode('morts')
+        renderListeTournoi()
         await renderListeGenerale()
         scheduleSaveListeTournoi()
       } else if (selected === 'Créer des tables de 5 ou 6 joueurs') { // Tables 5/6
@@ -4768,32 +4743,7 @@ async function renderFeuilleSoiree () {
     console.warn('Erreur assure exclu avant renderFeuilleSoiree', e)
   }
 
-
   let scores = await getScoresTournoi()
-
-  // Diagnostic : log structure brute
-  console.log('[DEBUG] Structure scoresTournoi:', JSON.stringify(scores, null, 2))
-
-  // Déterminer le nombre de manches max détecté
-  // Calculer le nombre de manches maximum (toutes lignes confondues)
-  let maxLen = 0
-  for (const row of scores) {
-    if (Array.isArray(row)) {
-      maxLen = Math.max(maxLen, row.length)
-    }
-  }
-  const nbManchesMax = Math.max(0, maxLen - 2)
-
-  // Normaliser chaque ligne pour avoir le même nombre de manches
-  scores = scores.map(row => {
-    if (!Array.isArray(row)) return row
-    const nom = row[0]
-    const manches = row.slice(1, row.length - 1)
-    const total = row[row.length - 1]
-    const manchesNorm = manches.slice()
-    while (manchesNorm.length < nbManchesMax) manchesNorm.push(0)
-    return [nom, ...manchesNorm, total]
-  })
 
   // Filtrer les morts pour l'affichage
   scores = scores.filter(row => !row[0].toUpperCase().includes('MORT'))
@@ -5116,21 +5066,8 @@ async function renderFeuilleSoiree () {
     return
   }
 
-
-  // Calculer le nombre de manches maximum (toutes lignes confondues)
-  // (Déjà défini plus haut)
-
-  // Compléter chaque ligne avec des valeurs vides pour chaque manche manquante
-  scores = scores.map(row => {
-    const valeurs = row.slice(1).map(Number)
-    const nbManches = Math.max(0, valeurs.length - 1)
-    const total = nbManches > 0 ? valeurs[valeurs.length - 1] : 0
-    const manches = valeurs.slice(0, nbManches)
-    // Ajoute des cases vides si la ligne est plus courte que nbManchesMax
-    const manchesCompletes = [...manches]
-    while (manchesCompletes.length < nbManchesMax) manchesCompletes.push('')
-    return [row[0], ...manchesCompletes, total]
-  })
+  const maxLen = scores.reduce((m, r) => Math.max(m, r.length), 0)
+  const nbManchesMax = Math.max(0, maxLen - 2)
 
   // Precompute redistribution places for sorting/display (using date from input)
   let placesForSort = []

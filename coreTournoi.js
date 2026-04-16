@@ -179,32 +179,37 @@ export function reportScoreDefense (feuille, indexAttaquant, scoreAttaquant, exe
 // exemptIndices: optional Set<number> of positions that should be ignored
 export function distributeAttackerScore (attackerScore, tableSizeOrPlayers, exemptIndices = new Set()) {
   const res = []
+  // If caller provided players array, respect Mort placeholders ("MORT...")
   if (Array.isArray(tableSizeOrPlayers)) {
     const players = tableSizeOrPlayers
     const tableSize = players.length
     const isMort = players.map(p => String(p || '').toUpperCase().startsWith('MORT'))
     const mortCount = isMort.filter(Boolean).length
+    // treat exempt indices like morts for active count
     const nbActifs = Math.max(1, tableSize - mortCount - exemptIndices.size)
-
     let nbDefenseurs = Math.max(1, nbActifs - 1)
     try {
       const pref = (typeof localStorage !== 'undefined') ? localStorage.getItem('tarot_morts_divisor') : null
-      if (mortCount === 1) {
+      // Apply preference only when there's exactly 1 Mort
+      const mc = isMort.filter(Boolean).length
+      if (mc === 1) {
         if (pref === '3') nbDefenseurs = 3
         else if (pref === '2') nbDefenseurs = Math.max(1, Math.min(2, nbActifs - 1))
       }
     } catch (_e) {}
-
-    const def = -attackerScore / nbDefenseurs
-    res.push(attackerScore)
-    for (let i = 1; i < tableSize; i++) {
-      if (isMort[i] || exemptIndices.has(i)) res.push(0)
-      else res.push(def)
-    }
-    return res
+      const def = -attackerScore / nbDefenseurs
+      // attacker at index 0, defenders placed for non-mort/non-exempt seats; others get 0
+      res.push(attackerScore)
+      for (let i = 1; i < tableSize; i++) {
+        if (isMort[i] || exemptIndices.has(i)) res.push(0)
+        else res.push(def)
+      }
+      return res
   }
 
   const tableSize = Number(tableSizeOrPlayers || 0)
+  // For numeric flows (tables décrites par une taille), utiliser systématiquement
+  // la règle standard : défense = attaque / 3 (pour tableSize >= 3).
   if (tableSize >= 3) {
     const def = -attackerScore / 3
     res.push(attackerScore)
@@ -221,6 +226,7 @@ export function validateAttackerDivisibility (attackerScore, tableSizeOrPlayers)
     const mortCount = isMort.filter(Boolean).length
     const nbActifs = Math.max(1, players.length - mortCount)
 
+    // Apply user preference X2/X3 only when the table contains exactly 1 Mort
     try {
       const pref = (typeof localStorage !== 'undefined') ? localStorage.getItem('tarot_morts_divisor') : null
       if (mortCount === 1) {
@@ -229,12 +235,14 @@ export function validateAttackerDivisibility (attackerScore, tableSizeOrPlayers)
         if (pref === '2') return (val % 2) === 0
       }
     } catch (_e) {}
-
     const nbDefenseurs = Math.max(1, nbActifs - 1)
     return (Number(attackerScore) % nbDefenseurs) === 0
   }
 
   const tableSize = Number(tableSizeOrPlayers || 0)
+  // For numeric tableSize (normal tables) require divisibility by 3 when
+  // tableSize >= 3. Tables à 3 joueurs doivent être représentées par un
+  // tableau contenant un 'Mort' et seront gérées par la branche array.
   if (tableSize >= 3) return (Number(attackerScore) % 3) === 0
   return true
 }
@@ -247,7 +255,7 @@ export function validateAttackerDivisibility (attackerScore, tableSizeOrPlayers)
  */
 // attackerIndex: where the attacker sits (0-based)
 // exemptIndices: optional Set of positions to exclude from sharing
-export function placeAttackerAtIndex (attackerScore, tableSizeOrPlayers, attackerIndex, exemptIndices = new Set(), divisorOverride = null) {
+export function placeAttackerAtIndex (attackerScore, tableSizeOrPlayers, attackerIndex, exemptIndices = new Set()) {
   const playersProvided = Array.isArray(tableSizeOrPlayers)
   const tableSize = playersProvided ? tableSizeOrPlayers.length : Number(tableSizeOrPlayers || 0)
   // rotate exempt indices into the "base" orientation where index 0 is the attacker
@@ -256,7 +264,7 @@ export function placeAttackerAtIndex (attackerScore, tableSizeOrPlayers, attacke
     const b = ((idx - attackerIndex) % tableSize + tableSize) % tableSize
     rotatedExempt.add(b)
   }
-  const base = distributeAttackerScore(attackerScore, tableSizeOrPlayers, rotatedExempt, divisorOverride)
+  const base = distributeAttackerScore(attackerScore, tableSizeOrPlayers, rotatedExempt)
   const res = new Array(tableSize).fill(0)
   for (let i = 0; i < tableSize; i++) {
     const target = (i + attackerIndex) % tableSize
