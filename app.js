@@ -1241,14 +1241,23 @@ try {
       // Prefer to insert the button before the exclu label if present
       const selectRot = feuilleActions.querySelector('#select-rotation')
       const excluSpan = document.getElementById('select-rotation-exclu')
-      if (excluSpan && excluSpan.parentElement === feuilleActions) {
-        feuilleActions.insertBefore(headerBtn, excluSpan)
+      if (selectRot && selectRot.parentElement === feuilleActions) {
+        // insert headerBtn right after the select
+        feuilleActions.insertBefore(headerBtn, selectRot.nextSibling)
       } else if (selectRot && selectRot.nextSibling) {
         // fallback: insert right after the select
         feuilleActions.insertBefore(headerBtn, selectRot.nextSibling)
       } else {
         feuilleActions.insertBefore(headerBtn, feuilleActions.firstChild)
       }
+
+      // If the exclu span exists elsewhere, move it to immediately after the button
+      try {
+        const existingExclu = document.getElementById('select-rotation-exclu')
+        if (existingExclu && existingExclu.parentElement === feuilleActions) {
+          feuilleActions.insertBefore(existingExclu, headerBtn.nextSibling)
+        }
+      } catch (_e) { /* ignore */ }
     }
   } catch (_e) { /* ignore */ }
 
