@@ -1098,9 +1098,13 @@ try {
     headerBtn.textContent = '\u2714'
     headerBtn.title = 'Valider manche (synchroniser toutes les tables)'
     headerBtn.onclick = performGlobalValidateManche
-      // Insert right after the select
+      // Prefer to insert the button before the exclu label if present
       const selectRot = feuilleActions.querySelector('#select-rotation')
-      if (selectRot && selectRot.nextSibling) {
+      const excluSpan = document.getElementById('select-rotation-exclu')
+      if (excluSpan && excluSpan.parentElement === feuilleActions) {
+        feuilleActions.insertBefore(headerBtn, excluSpan)
+      } else if (selectRot && selectRot.nextSibling) {
+        // fallback: insert right after the select
         feuilleActions.insertBefore(headerBtn, selectRot.nextSibling)
       } else {
         feuilleActions.insertBefore(headerBtn, feuilleActions.firstChild)
