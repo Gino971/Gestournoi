@@ -2827,7 +2827,6 @@ async function mettreAJourSelectRotationsEtTables () {
   } catch (_e) { /* ignore snapshot read errors */ }
   let indexASelectionner = 0
   let foundFirstIncomplete = false
-
   const optionsHtml = nomsRotations.map((nom, index) => {
     // By default selectable, but if in exclu mode and this manche index
     // is locked somewhere, mark option inaccessible.
@@ -2962,16 +2961,15 @@ async function validateAndPersistTable (tData, tblEl, mancheIndex = -1) {
     await setScoresParTable(tablesData)
     try { window.__lastPersistedTableEntry = entry; window.__validateAndPersistCalls = window.__validateAndPersistCalls || []; window.__validateAndPersistCalls.push({ ts: Date.now(), table: entry.table, totals: (entry.totals || []).slice() }) } catch (_e) {}
 
-    // Persist totals into scores_tournoi only if mancheAllFilled
+    // Persist totals into scores_tournoi (allow validation even when some
+    // inputs are empty — do not block per-manche except existing serpentin logic)
     try {
-      if (mancheIndex === -1 || mancheAllFilled) {
-        const feuille = entry.players.map((nom, i) => [nom, entry.totals[i], entry.totals[i]])
-        const scoresSoiree = await getScoresTournoi()
-        const nbPartiesMax = Number(nbPartiesInput.value || 4)
-        const newScores = applyFeuilleToScoresSoiree(scoresSoiree, feuille, nbPartiesMax, selectRotation.selectedIndex)
-        await setScoresTournoi(newScores)
-        transferForThisTable = true
-      }
+      const feuille = entry.players.map((nom, i) => [nom, entry.totals[i], entry.totals[i]])
+      const scoresSoiree = await getScoresTournoi()
+      const nbPartiesMax = Number(nbPartiesInput.value || 4)
+      const newScores = applyFeuilleToScoresSoiree(scoresSoiree, feuille, nbPartiesMax, selectRotation.selectedIndex)
+      await setScoresTournoi(newScores)
+      transferForThisTable = true
     } catch (e) {
       console.warn('Erreur synchronisation totaux vers scores_tournoi', e)
     }
