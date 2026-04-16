@@ -4541,9 +4541,13 @@ async function updateSelectRotationExcluDisplay () {
       span = document.createElement('span')
       span.id = spanId
       span.className = 'rotation-exclu-inline'
-      // Positionner SOUS le select de rotation
+      // Positionner SOUS le select de rotation — preferer le placer APRES le bouton de validation s'il existe
       try {
-        if (selectRotation && typeof selectRotation.insertAdjacentElement === 'function') {
+        const headerBtn = document.getElementById('btn-validate-manche-header')
+        if (headerBtn && headerBtn.parentElement === selectRotation.parentElement) {
+          headerBtn.insertAdjacentElement('afterend', span)
+          span.setAttribute('data-below', 'true')
+        } else if (selectRotation && typeof selectRotation.insertAdjacentElement === 'function') {
           // Insert directly after the select so the banner appears on the next line
           selectRotation.insertAdjacentElement('afterend', span)
           // Mark as placed below for CSS styling
