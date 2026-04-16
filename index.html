@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Scores Tarot</title>
   <!-- PWA : plein écran sans barres Android / onglets navigateur -->
-  <link rel="manifest" href="/frontend/manifest.json">
+  <link rel="manifest" href="manifest.json">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#1f2933">
-  <link rel="apple-touch-icon" href="/frontend/build/Excuse.png">
-  <link rel="stylesheet" href="/frontend/style.css?v=11" />
+  <link rel="apple-touch-icon" href="build/Excuse.png">
+  <link rel="stylesheet" href="style.css?v=11" />
   <!-- Inline critical styles to force 'Mort' visuals while debugging cache issues -->
   <style>
     tr.is-mort .col-joueur { color: #FFD700 !important; font-weight:700 !important; }
@@ -472,8 +472,8 @@
     <!-- Theme panel removed: theming is now static via CSS variables in style.css -->
   </main>
 
-  <script src="/frontend/lib/jspdf.umd.min.js"></script>
-  <script src="/frontend/lib/jspdf.plugin.autotable.min.js"></script>
-  <script type="module" src="/frontend/app.js?v=16"></script>
+  <script src="lib/jspdf.umd.min.js"></script>
+  <script src="lib/jspdf.plugin.autotable.min.js"></script>
+  <script type="module" src="app.js?v=16"></script>
 </body>
 </html>
