@@ -200,6 +200,9 @@ function getRequiredDivisor (playersOrSize) {
       try {
         const btn = (ev && ev.target) ? ev.target.closest('#btn-lucky-draw') : document.getElementById('btn-lucky-draw')
         const dateIso = (inputDateTournoi && inputDateTournoi.value) ? inputDateTournoi.value : getTodayIso()
+        // Prevent concurrent/re-entrant runs: acquire lock before any await
+        if (luckyDrawInProgress.has(dateIso)) return
+        try { luckyDrawInProgress.add(dateIso) } catch (_e) {}
         const scores = await getScoresTournoi()
         if (!scores.length) {
           // Visual feedback so user knows the handler ran but there's no data to act on
@@ -460,11 +463,10 @@ function getRequiredDivisor (playersOrSize) {
     justFinishedTournamentDate = null
   } catch (e) {
     console.error('Lucky draw failed', e)
-  } finally {
+    } finally {
     try {
-      const dateIsoFin = (inputDateTournoi && inputDateTournoi.value) ? inputDateTournoi.value : getTodayIso()
-      // release in-progress lock for this date
-      try { luckyDrawInProgress.delete(dateIsoFin) } catch (_e) {}
+      // release in-progress lock for the original dateIso (not current input value)
+      try { if (typeof dateIso !== 'undefined') luckyDrawInProgress.delete(dateIso) } catch (_e) {}
       await updateLuckyButtonState()
     } catch (_e) {}
   }
