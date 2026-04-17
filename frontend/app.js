@@ -34,6 +34,31 @@ import { generateSerpentinTables } from './serpentin.js'
 import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js'
 import { buildClassementFromRecap } from './lib/classement-utils.js'
 
+// Temporary build identifier for manual served-file verification (do not commit)
+const FRONTEND_BUILD_ID = 'frontend-build-2026-04-17T23:30:00Z'
+
+// Use existing `showToast` if present, otherwise provide a local `showBuildToast`
+function showBuildToast (msg, ms = 4000) {
+  // Debug toasts disabled — no-op to avoid showing instrumentation to users.
+  return
+}
+
+// Local confirmation (thumb) used by frontend flows. Kept minimal and resilient
+// so it works even when a global `showConfirmation` isn't present.
+function showConfirmation () {
+  try {
+    const overlay = document.getElementById('confirmation-overlay')
+    if (!overlay) return
+    overlay.classList.remove('hidden')
+    // Keep visible slightly longer so user notices it
+    setTimeout(() => {
+      try { overlay.classList.add('hidden') } catch (_e) {}
+    }, 1200)
+  } catch (e) { /* ignore */ }
+}
+
+// build id toast removed (debug toasts disabled)
+
 // User request: disable all console output in the UI (silence logs/warns/errors)
 try {
   if (typeof console !== 'undefined') {
@@ -197,13 +222,22 @@ function getRequiredDivisor (playersOrSize) {
 
     // Lucky draw handler (attached to btn-lucky-draw)
     async function handleLuckyDrawClick (ev) {
+      let lockToken = null
+      // expose dateIso and btn to the outer finally block so we can always
+      // release the lock and re-enable the button even if the try-block
+      // returns early or throws. Declared here (not inside try) on purpose.
+      let dateIso = undefined
+      let btn = null
       try {
-        const btn = (ev && ev.target) ? ev.target.closest('#btn-lucky-draw') : document.getElementById('btn-lucky-draw')
-        const dateIso = (inputDateTournoi && inputDateTournoi.value) ? inputDateTournoi.value : getTodayIso()
-        // Prevent concurrent/re-entrant runs: acquire lock before any await
-        if (luckyDrawInProgress.has(dateIso)) return
-        try { luckyDrawInProgress.add(dateIso) } catch (_e) {}
+        btn = (ev && ev.target) ? ev.target.closest('#btn-lucky-draw') : document.getElementById('btn-lucky-draw')
+        dateIso = (inputDateTournoi && inputDateTournoi.value) ? inputDateTournoi.value : getTodayIso()
+        // Acquire lock immediately to prevent concurrent runs
+        lockToken = acquireLuckyLock(dateIso)
+        if (!lockToken) return
+        try { if (btn) btn.disabled = true } catch (_e) {}
+        try { showBuildToast('LD: lock acquired', 2500) } catch (_e) {}
         const scores = await getScoresTournoi()
+        try { showBuildToast(`LD: scores=${(scores||[]).length}`, 2000) } catch (_e) {}
         if (!scores.length) {
           // Visual feedback so user knows the handler ran but there's no data to act on
           try {
@@ -230,6 +264,7 @@ function getRequiredDivisor (playersOrSize) {
 
         let placesForDate = []
         try { placesForDate = await computeRedistribPlacesFor(dateIso, scores.length) } catch (e) { placesForDate = [] }
+        try { showBuildToast(`LD: placesForDate=${(placesForDate||[]).length}`, 2000) } catch (_e) {}
 
     const sortedByTotal = [...scores].sort((a, b) => {
       const aVals = a.slice(1).map(Number); const aTotal = aVals.length ? aVals[aVals.length - 1] : 0
@@ -352,6 +387,7 @@ function getRequiredDivisor (playersOrSize) {
     }
 
     const seq = buildHighlightSequence(L, totalCycles, winnerIdx)
+    try { showBuildToast('LD: start animation', 2000) } catch (_e) {}
 
     // Schedule visuals and audio using the AudioContext clock when available.
     // Use a RAF-driven loop to sync visuals to the AudioContext time so visuals can
@@ -447,6 +483,7 @@ function getRequiredDivisor (playersOrSize) {
 
     const winnerRow = eligibleRows[winnerIdx]
     const winnerName = winnerRow ? (winnerRow.querySelector('.col-joueur')?.textContent || '').trim() : eligible[0]
+    try { showBuildToast(`LD: winner=${winnerName}`, 4000) } catch (_e) {}
 
     eligibleRows.forEach(r => r.classList.remove('lucky-highlight'))
     if (winnerRow) {
@@ -463,11 +500,14 @@ function getRequiredDivisor (playersOrSize) {
     justFinishedTournamentDate = null
   } catch (e) {
     console.error('Lucky draw failed', e)
+    try { showBuildToast('LD: error - ' + (e && e.message ? e.message : String(e)), 6000) } catch (_e) {}
     } finally {
     try {
-      // release in-progress lock for the original dateIso (not current input value)
-      try { if (typeof dateIso !== 'undefined') luckyDrawInProgress.delete(dateIso) } catch (_e) {}
+      // release in-progress lock for the original dateIso (only if we own it)
+      try { if (typeof dateIso !== 'undefined') { showBuildToast('LD: releasing lock', 1500); releaseLuckyLock(dateIso, lockToken) } } catch (_e) {}
       await updateLuckyButtonState()
+      // ensure button is re-enabled even if updateLuckyButtonState returned early
+      try { const __btn = document.getElementById('btn-lucky-draw'); if (__btn) __btn.disabled = false } catch (_e) {}
     } catch (_e) {}
   }
 }
@@ -1239,7 +1279,26 @@ let justFinishedTournamentDate = null
 const luckyWinnerByDate = {}          // { 'YYYY-MM-DD': 'Player Name' }
 const rewardedPlayersByDate = {}      // { 'YYYY-MM-DD': Set([...names]) }
 // Guards to prevent double / re-entrant lucky-draw execution for the same date
-const luckyDrawInProgress = new Set()
+// Use a Map(dateIso -> token) so only the owner that acquired the lock can release it.
+const luckyDrawInProgressMap = new Map()
+
+function acquireLuckyLock (isoDate) {
+  try {
+    if (!isoDate) return null
+    if (luckyDrawInProgressMap.has(isoDate)) return null
+    const token = Symbol()
+    luckyDrawInProgressMap.set(isoDate, token)
+    return token
+  } catch (e) { return null }
+}
+
+function releaseLuckyLock (isoDate, token) {
+  try {
+    if (!isoDate) return
+    const cur = luckyDrawInProgressMap.get(isoDate)
+    if (cur && token && cur === token) luckyDrawInProgressMap.delete(isoDate)
+  } catch (e) { /* ignore */ }
+}
 
 // Helpers to manage/clear lucky state
 function clearLuckyForDate (isoDate) {
@@ -1260,13 +1319,13 @@ function clearAllLucky () {
 /* persistLuckyToRecap removed — recap must be updated only on "Fin de tournoi" */
 
 // Update button state by checking both memory and persisted recap
-async function updateLuckyButtonState () {
+    async function updateLuckyButtonState () {
   try {
     const btn = document.getElementById('btn-lucky-draw')
     if (!btn) return
     const dateIso = (inputDateTournoi && inputDateTournoi.value) ? inputDateTournoi.value : getTodayIso()
     // Guard against concurrent/re-entrant execution for the same date
-    if (luckyDrawInProgress.has(dateIso)) return
+    if (luckyDrawInProgressMap.has(dateIso)) return
     // Do NOT acquire the in-progress lock here — locks are added/removed by the
     // actual draw handler to avoid blocking the button permanently.
     // If a lucky winner already exists for this date, clear previous 'chanceux' state
@@ -1281,100 +1340,6 @@ async function updateLuckyButtonState () {
       // ignore errors reading recap
     }
     btn.disabled = false
-  } catch (e) { /* ignore */ }
-}
-
-
-// ------------------ Helper Feedback ------------------
-
-function showConfirmation () {
-  const overlay = document.getElementById('confirmation-overlay')
-  if (overlay) {
-    overlay.classList.remove('hidden')
-    setTimeout(() => {
-      overlay.classList.add('hidden')
-    }, 600)
-  }
-}
-
-// --- Custom HTML dialog system (replaces native alert/confirm/choice on tablet) ---
-function _showCustomDialog (message, buttons) {
-  return new Promise((resolve) => {
-    const overlay = document.getElementById('custom-dialog-overlay')
-    const msgEl = document.getElementById('custom-dialog-message')
-    const btnContainer = document.getElementById('custom-dialog-buttons')
-    if (!overlay || !msgEl || !btnContainer) {
-      // DOM not ready – fall back to native
-      resolve(0)
-      return
-    }
-    msgEl.textContent = message
-    btnContainer.innerHTML = ''
-    btnContainer.className = 'custom-dialog-buttons'
-
-    buttons.forEach((b, i) => {
-      const btn = document.createElement('button')
-      btn.textContent = b.label
-      btn.className = b.cls || 'custom-dialog-btn-primary'
-      btn.addEventListener('click', () => { close(i) })
-      btnContainer.appendChild(btn)
-    })
-
-    overlay.classList.remove('hidden')
-    // Focus first button
-    const first = btnContainer.querySelector('button')
-    if (first) first.focus()
-
-    function onKey (e) {
-      if (e.key === 'Escape') close(buttons.length - 1)
-    }
-    document.addEventListener('keydown', onKey)
-
-    function close (idx) {
-      document.removeEventListener('keydown', onKey)
-      overlay.classList.add('hidden')
-      resolve(idx)
-    }
-  })
-}
-
-// Affiche un dialogue avec un bouton "Imprimer" qui ouvre le contenu dans un
-// nouvel onglet et lance l'impression depuis cet onglet.
-// window.print() sur la page courante ne fonctionne pas sur Chrome Android.
-// onDone est appelé après (nettoyage).
-async function triggerPrint (onDone, filename) {
-  const printContainer = document.getElementById('print-container')
-  if (!printContainer || !printContainer.innerHTML.trim()) {
-    showAlert('Rien à imprimer.')
-    if (onDone) onDone()
-    return
-  }
-  if (!filename) filename = 'export.pdf'
-
-  const overlay = document.getElementById('custom-dialog-overlay')
-  const msgEl = document.getElementById('custom-dialog-message')
-  const btnContainer = document.getElementById('custom-dialog-buttons')
-  if (!overlay || !msgEl || !btnContainer) {
-    if (onDone) onDone()
-    return
-  }
-
-  // Afficher directement le message de génération (pas d'étape intermédiaire)
-  msgEl.textContent = 'Génération du PDF en cours…'
-  btnContainer.innerHTML = ''
-  overlay.classList.remove('hidden')
-
-  try {
-    const pdfBlob = await _generatePDF(printContainer)
-    const url = URL.createObjectURL(pdfBlob)
-
-    // Tenter le téléchargement automatique
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
 
     // Succès : afficher brièvement puis proposer de fermer
     msgEl.textContent = '✅ PDF téléchargé !'
