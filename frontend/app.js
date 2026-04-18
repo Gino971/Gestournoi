@@ -2555,15 +2555,24 @@ if (compValidateBtn) compValidateBtn.addEventListener('click', async () => {
   }
 
   // Persist and apply as the canonical full tirage
+  // Apply canonical full tirage (used for rotations). Do NOT overwrite
+  // the persisted `listeTournoi` when an exclu is configured: the exclu
+  // should remain shown in the tournoi list but must NOT be placed at a table.
   dernierFullTirage = full
   try { localStorage.setItem('tarot_full_tirage', JSON.stringify(dernierFullTirage)) } catch (_e) {}
 
-  // Update listeTournoi & initial scores (same behaviour as tirage au sort)
+  // Update listeTournoi & initial scores only when there is no exclu
   try {
-    listeTournoi = full.map(p => p.nom)
-    renderListeTournoi()
-    await renderListeGenerale()
-    scheduleSaveListeTournoi()
+    if (!exclSet || exclSet.size === 0) {
+      listeTournoi = full.map(p => p.nom)
+      renderListeTournoi()
+      await renderListeGenerale()
+      scheduleSaveListeTournoi()
+    } else {
+      // When exclu present, keep existing listeTournoi (so excluded remains visible)
+      try { renderListeTournoi() } catch (_e) {}
+      try { await renderListeGenerale() } catch (_e) {}
+    }
   } catch (e) { console.warn('Failed to update listeTournoi from manual composition', e) }
 
   // Initialize scores tournoi (Nom, Total=0)
