@@ -2555,31 +2555,60 @@ if (compValidateBtn) compValidateBtn.addEventListener('click', async () => {
   }
 
   // Persist and apply as the canonical full tirage
-  // Apply canonical full tirage (used for rotations). Do NOT overwrite
-  // the persisted `listeTournoi` when an exclu is configured: the exclu
-  // should remain shown in the tournoi list but must NOT be placed at a table.
-  dernierFullTirage = full
-  try { localStorage.setItem('tarot_full_tirage', JSON.stringify(dernierFullTirage)) } catch (_e) {}
-
-  // Update listeTournoi & initial scores only when there is no exclu
+  // Apply canonical full tirage for rotations. When an `exclu` is configured
+  // we must NOT place the excluded player into seats — build a seating list
+  // that removes excluded players, persist it as `dernierFullTirage` and use
+  // `exclusArr` to compute rotations. However, keep `listeTournoi` (the
+  // tournament registry shown to users) unchanged so the excluded player
+  // remains visible with the '(exclu)' label.
   try {
-    if (!exclSet || exclSet.size === 0) {
-      listeTournoi = full.map(p => p.nom)
+    const exclusArr = await getExclusTournoi().catch(() => [])
+    const exclSetLocal = new Set((exclusArr || []).filter(Boolean))
+    if (exclSetLocal.size > 0) {
+      // seating excludes the excluded players
+      const seated = full.filter(nm => !exclSetLocal.has(nm))
+      dernierFullTirage = seated.map((nm, idx) => ({ nom: nm, numero: idx + 1 }))
+    } else {
+      dernierFullTirage = full
+    }
+    try { localStorage.setItem('tarot_full_tirage', JSON.stringify(dernierFullTirage)) } catch (_e) {}
+  } catch (e) {
+    console.warn('Failed to persist dernierFullTirage from manual composition', e)
+    dernierFullTirage = full
+    try { localStorage.setItem('tarot_full_tirage', JSON.stringify(dernierFullTirage)) } catch (_e) {}
+  }
+
+  // Update visible lists and initialize scores. Do NOT overwrite
+  // `listeTournoi` when an exclu is configured — keep the excluded player
+  // in the tournament list but out of the seated tirage used by rotations.
+  try {
+    const exclusArrForUi = await getExclusTournoi().catch(() => [])
+    const exclSetForUi = new Set((exclusArrForUi || []).filter(Boolean))
+    if (!exclSetForUi || exclSetForUi.size === 0) {
+      listeTournoi = dernierFullTirage.map(p => p.nom)
       renderListeTournoi()
       await renderListeGenerale()
       scheduleSaveListeTournoi()
+      // Initialize scores tournoi (Nom, Total=0)
+      try {
+        const initScores = listeTournoi.map(nom => [nom, 0])
+        await setScoresTournoi(initScores)
+      } catch (e) { console.warn('Failed to set initial scores from composition', e) }
     } else {
-      // When exclu present, keep existing listeTournoi (so excluded remains visible)
+      // Keep existing listeTournoi (so exclu remains visible). Refresh UI
       try { renderListeTournoi() } catch (_e) {}
       try { await renderListeGenerale() } catch (_e) {}
+      scheduleSaveListeTournoi()
+      // Ensure scores exist for visible players (initialize if empty)
+      try {
+        const existing = await getScoresTournoi() || []
+        if (!existing || existing.length === 0) {
+          const initScores = (listeTournoi || []).map(nom => [nom, 0])
+          await setScoresTournoi(initScores)
+        }
+      } catch (_e) { /* ignore score init errors */ }
     }
-  } catch (e) { console.warn('Failed to update listeTournoi from manual composition', e) }
-
-  // Initialize scores tournoi (Nom, Total=0)
-  try {
-    const initScores = listeTournoi.map(nom => [nom, 0])
-    await setScoresTournoi(initScores)
-  } catch (e) { console.warn('Failed to set initial scores from composition', e) }
+  } catch (e) { console.warn('Failed to update tournoi list after manual composition', e) }
 
   // Rebuild rotations based on this full tirage
   try {
