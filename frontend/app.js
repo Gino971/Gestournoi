@@ -2253,20 +2253,61 @@ async function syncCompositionToPlan () {
       ? dernierFullTirage.map(p => p.nom)
       : (listeTournoi || [])
 
-    const previewFullTirage = []
-    let ptr = 0
-    for (let i = 0; i < baseOrder.length; i++) {
-      const name = baseOrder[i]
-      if (exclSet.has(name)) {
-        previewFullTirage.push({ nom: name, numero: previewFullTirage.length + 1 })
-      } else {
+    // Build previewFullTirage.
+    // Behavior:
+    // - If `excl` players are configured, preserve previous ordering behavior.
+    // - Else if there are MORT placeholders chosen by the user, reserve North
+    //   seats on the last tables for those MORTs and fill other seats (no
+    //   5th/exempt players displayed).
+    // - Otherwise, preserve original simple ordering (arranged then remaining).
+    let previewFullTirage = []
+    const ordered = fullOrder.slice()
+    const mortNames = ordered.filter(n => String(n || '').toUpperCase().startsWith('MORT'))
+
+    if (exclSet && exclSet.size > 0) {
+      // Preserve previous behavior when exclusions are configured
+      let ptr = 0
+      for (let i = 0; i < baseOrder.length; i++) {
+        const name = baseOrder[i]
+        if (exclSet.has(name)) {
+          previewFullTirage.push({ nom: name, numero: previewFullTirage.length + 1 })
+        } else {
+          const nm = fullOrder[ptr++] || name
+          previewFullTirage.push({ nom: nm, numero: previewFullTirage.length + 1 })
+        }
+      }
+      while (ptr < fullOrder.length) previewFullTirage.push({ nom: fullOrder[ptr++], numero: previewFullTirage.length + 1 })
+    } else if (mortNames.length > 0) {
+      // Special mode when user placed MORT placeholders: ensure we create a
+      // multiple-of-4 tirage so rotations use only 4-seat tables and nobody
+      // is rendered as an "exempt" (5th) player. Place MORTs on North of
+      // the last tables, then fill remaining seats in N,S,E,O order.
+      const pool = ordered.filter(n => !String(n || '').toUpperCase().startsWith('MORT'))
+      const totalPlayers = ordered.length
+      const nbTables = Math.max(1, Math.ceil(totalPlayers / 4))
+      const totalSeats = nbTables * 4
+
+      const seats = new Array(totalSeats).fill(null)
+      for (let i = 0; i < mortNames.length; i++) {
+        const tableIdx = nbTables - mortNames.length + i
+        const seatIndex = Math.max(0, tableIdx) * 4
+        if (seatIndex < totalSeats) seats[seatIndex] = mortNames[i]
+      }
+      let p = 0
+      for (let s = 0; s < totalSeats; s++) {
+        if (seats[s]) continue
+        seats[s] = pool[p++] || null
+      }
+      previewFullTirage = seats.map((nom, idx) => ({ nom: nom, numero: idx + 1 }))
+    } else {
+      // Default: simple ordered mapping (arranged then remaining)
+      let ptr = 0
+      for (let i = 0; i < baseOrder.length; i++) {
+        const name = baseOrder[i]
         const nm = fullOrder[ptr++] || name
         previewFullTirage.push({ nom: nm, numero: previewFullTirage.length + 1 })
       }
-    }
-    // Append any leftover composed names (defensive)
-    while (ptr < fullOrder.length) {
-      previewFullTirage.push({ nom: fullOrder[ptr++], numero: previewFullTirage.length + 1 })
+      while (ptr < fullOrder.length) previewFullTirage.push({ nom: fullOrder[ptr++], numero: previewFullTirage.length + 1 })
     }
 
     // backup current rotations only once when starting preview
@@ -2439,7 +2480,8 @@ if (compValidateBtn) compValidateBtn.addEventListener('click', async () => {
   }
 
   // complete the ordering with remaining players (preserve listeTournoi order)
-  let remaining = (listeTournoi || []).filter(n => n && !String(n).toUpperCase().startsWith('MORT') && !arranged.includes(n))
+  // NOTE: do NOT remove MORT placeholders here — they must participate in final ordering
+  let remaining = (listeTournoi || []).filter(n => n && !arranged.includes(n))
   try {
     if (typeof getMode === 'function' && getMode() === 'exclu') {
       const exclusArr = (await getExclusTournoi()) || []
@@ -2458,20 +2500,59 @@ if (compValidateBtn) compValidateBtn.addEventListener('click', async () => {
     ? dernierFullTirage.map(p => p.nom)
     : (listeTournoi || [])
 
-  const finalOrder = []
-  let ptr = 0
-  for (let i = 0; i < baseOrder.length; i++) {
-    const name = baseOrder[i]
-    if (exclSet.has(name)) {
-      finalOrder.push(name)
-    } else {
-      finalOrder.push(fullOrder[ptr++] || name)
-    }
-  }
-  // Append leftovers defensively
-  while (ptr < fullOrder.length) finalOrder.push(fullOrder[ptr++])
+  // Build the canonical full tirage. If exclusions are configured, preserve
+  // previous base ordering for excluded players. Otherwise, if MORT
+  // placeholders are present in the composed ordering, place them on the
+  // North seats of the last tables and produce a multiple-of-4 tirage so
+  // rotations and saisie use no exempt (5th) players.
+  const composed = [...fullOrder]
+  const mortNamesFinal = composed.filter(n => String(n || '').toUpperCase().startsWith('MORT'))
 
-  const full = finalOrder.map((nm, idx) => ({ nom: nm, numero: idx + 1 }))
+  let full = []
+  if (exclSet && exclSet.size > 0) {
+    const finalOrder = []
+    let ptr = 0
+    for (let i = 0; i < baseOrder.length; i++) {
+      const name = baseOrder[i]
+      if (exclSet.has(name)) {
+        finalOrder.push(name)
+      } else {
+        finalOrder.push(fullOrder[ptr++] || name)
+      }
+    }
+    while (ptr < fullOrder.length) finalOrder.push(fullOrder[ptr++])
+    full = finalOrder.map((nm, idx) => ({ nom: nm, numero: idx + 1 }))
+  } else if (mortNamesFinal.length > 0) {
+    const pool = composed.filter(n => !String(n || '').toUpperCase().startsWith('MORT'))
+    const totalPlayers = composed.length
+    const nbTables = Math.max(1, Math.ceil(totalPlayers / 4))
+    const totalSeats = nbTables * 4
+    const seats = new Array(totalSeats).fill(null)
+    for (let i = 0; i < mortNamesFinal.length; i++) {
+      const tableIdx = nbTables - mortNamesFinal.length + i
+      const seatIndex = Math.max(0, tableIdx) * 4
+      if (seatIndex < totalSeats) seats[seatIndex] = mortNamesFinal[i]
+    }
+    let p = 0
+    for (let s = 0; s < totalSeats; s++) {
+      if (seats[s]) continue
+      seats[s] = pool[p++] || null
+    }
+    full = seats.map((nom, idx) => ({ nom: nom, numero: idx + 1 }))
+  } else {
+    const finalOrder = []
+    let ptr = 0
+    for (let i = 0; i < baseOrder.length; i++) {
+      const name = baseOrder[i]
+      if (exclSet.has(name)) {
+        finalOrder.push(name)
+      } else {
+        finalOrder.push(fullOrder[ptr++] || name)
+      }
+    }
+    while (ptr < fullOrder.length) finalOrder.push(fullOrder[ptr++])
+    full = finalOrder.map((nm, idx) => ({ nom: nm, numero: idx + 1 }))
+  }
 
   // Persist and apply as the canonical full tirage
   dernierFullTirage = full
