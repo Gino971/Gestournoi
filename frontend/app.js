@@ -1340,32 +1340,8 @@ function clearAllLucky () {
       // ignore errors reading recap
     }
     btn.disabled = false
-
-    // Succès : afficher brièvement puis proposer de fermer
-    msgEl.textContent = '✅ PDF téléchargé !'
-    btnContainer.innerHTML = ''
-    const btnClose = document.createElement('button')
-    btnClose.textContent = 'OK'
-    btnClose.className = 'custom-dialog-btn-primary'
-    btnClose.addEventListener('click', () => {
-      URL.revokeObjectURL(url)
-      overlay.classList.add('hidden')
-      if (onDone) onDone()
-    })
-    btnContainer.appendChild(btnClose)
-    btnClose.focus()
   } catch (err) {
-    console.error('Erreur PDF:', err)
-    msgEl.textContent = 'Erreur : ' + (err.message || err)
-    btnContainer.innerHTML = ''
-    const btnClose = document.createElement('button')
-    btnClose.textContent = 'Fermer'
-    btnClose.className = 'custom-dialog-btn-secondary'
-    btnClose.addEventListener('click', () => {
-      overlay.classList.add('hidden')
-      if (onDone) onDone()
-    })
-    btnContainer.appendChild(btnClose)
+    console.warn('updateLuckyButtonState failed', err)
   }
 }
 
@@ -1454,6 +1430,72 @@ async function _generatePDF (container) {
     return pdf.output('blob')
   } finally {
     container.style.display = prevDisplay
+  }
+}
+
+// Affiche un dialogue avec un bouton "Imprimer" qui ouvre le contenu dans un
+// nouvel onglet et lance l'impression depuis cet onglet.
+// window.print() sur la page courante ne fonctionne pas sur Chrome Android.
+// onDone est appelé après (nettoyage).
+async function triggerPrint (onDone, filename) {
+  const printContainer = document.getElementById('print-container')
+  if (!printContainer || !printContainer.innerHTML.trim()) {
+    showAlert('Rien à imprimer.')
+    if (onDone) onDone()
+    return
+  }
+  if (!filename) filename = 'export.pdf'
+
+  const overlay = document.getElementById('custom-dialog-overlay')
+  const msgEl = document.getElementById('custom-dialog-message')
+  const btnContainer = document.getElementById('custom-dialog-buttons')
+  if (!overlay || !msgEl || !btnContainer) {
+    if (onDone) onDone()
+    return
+  }
+
+  // Afficher directement le message de génération (pas d'étape intermédiaire)
+  msgEl.textContent = 'Génération du PDF en cours…'
+  btnContainer.innerHTML = ''
+  overlay.classList.remove('hidden')
+
+  try {
+    const pdfBlob = await _generatePDF(printContainer)
+    const url = URL.createObjectURL(pdfBlob)
+
+    // Tenter le téléchargement automatique
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+
+    // Succès : afficher brièvement puis proposer de fermer
+    msgEl.textContent = '✅ PDF téléchargé !'
+    btnContainer.innerHTML = ''
+    const btnClose = document.createElement('button')
+    btnClose.textContent = 'OK'
+    btnClose.className = 'custom-dialog-btn-primary'
+    btnClose.addEventListener('click', () => {
+      URL.revokeObjectURL(url)
+      overlay.classList.add('hidden')
+      if (onDone) onDone()
+    })
+    btnContainer.appendChild(btnClose)
+    btnClose.focus()
+  } catch (err) {
+    console.error('Erreur PDF:', err)
+    msgEl.textContent = 'Erreur : ' + (err.message || err)
+    btnContainer.innerHTML = ''
+    const btnClose = document.createElement('button')
+    btnClose.textContent = 'Fermer'
+    btnClose.className = 'custom-dialog-btn-secondary'
+    btnClose.addEventListener('click', () => {
+      overlay.classList.add('hidden')
+      if (onDone) onDone()
+    })
+    btnContainer.appendChild(btnClose)
   }
 }
 
