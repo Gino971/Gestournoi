@@ -1,4 +1,27 @@
 // app.js
+/*
+  Définitions de domaine (important — lire avant d'éditer le code):
+
+  - Tournoi : l'ensemble global de l'événement (une seule instance de l'application
+    gère un tournoi à la fois). Le tournoi contient un nombre fixe de manches.
+
+  - Manche : une étape temporelle du tournoi. Chaque manche est composée d'un
+    certain nombre de parties. Le nombre de manches est choisi par l'utilisateur
+    avant le tirage/composition. Les manches sont traitées séquentiellement :
+    on ne calcule/affiche la manche N+1 qu'après validation de la manche N,
+    car la composition des manches ultérieures dépend des résultats précédents.
+
+  - Partie : une table/jouer une partie individuelle au sein d'une manche.
+    Une manche contient plusieurs parties (par exemple 4 parties par manche,
+    réglable par l'utilisateur). Chaque partie a ses scores individuels qui
+    s'agrègent pour produire les totaux de la manche.
+
+  Règle importante pour l'implémentation : ne pas confondre "partie" et
+  "manche" — le code s'attend à ce que "manche" soit l'unité séquentielle
+  (N=0..M-1) et que chaque manche contienne plusieurs "parties" (par table).
+  Le rendu de la saisie et la composition doivent afficher uniquement la
+  manche courante (et n'exposer les manches suivantes qu'après validation).
+*/
 import {
   loadListeJoueurs,
   saveListeJoueurs,
@@ -33,6 +56,32 @@ import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from '
 import { generateSerpentinTables } from './serpentin.js'
 import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js'
 import { buildClassementFromRecap } from './lib/classement-utils.js'
+import { askConfirm, _showCustomDialog } from './lib/dialogs.js'
+import { initComposition } from './lib/composition.js'
+// Temporary build identifier for manual served-file verification (do not commit)
+const FRONTEND_BUILD_ID = 'frontend-build-2026-04-17T23:30:00Z'
+
+// Use existing `showToast` if present, otherwise provide a local `showBuildToast`
+function showBuildToast (msg, ms = 4000) {
+  // Debug toasts disabled — no-op to avoid showing instrumentation to users.
+  return
+}
+
+// Local confirmation (thumb) used by frontend flows. Kept minimal and resilient
+// so it works even when a global `showConfirmation` isn't present.
+function showConfirmation () {
+  try {
+    const overlay = document.getElementById('confirmation-overlay')
+    if (!overlay) return
+    overlay.classList.remove('hidden')
+    // Keep visible slightly longer so user notices it
+    setTimeout(() => {
+      try { overlay.classList.add('hidden') } catch (_e) {}
+    }, 1200)
+  } catch (e) { /* ignore */ }
+}
+
+// build id toast removed (debug toasts disabled)
 
 // User request: disable all console output in the UI (silence logs/warns/errors)
 try {
@@ -197,10 +246,22 @@ function getRequiredDivisor (playersOrSize) {
 
     // Lucky draw handler (attached to btn-lucky-draw)
     async function handleLuckyDrawClick (ev) {
+      let lockToken = null
+      // expose dateIso and btn to the outer finally block so we can always
+      // release the lock and re-enable the button even if the try-block
+      // returns early or throws. Declared here (not inside try) on purpose.
+      let dateIso = undefined
+      let btn = null
       try {
-        const btn = (ev && ev.target) ? ev.target.closest('#btn-lucky-draw') : document.getElementById('btn-lucky-draw')
-        const dateIso = (inputDateTournoi && inputDateTournoi.value) ? inputDateTournoi.value : getTodayIso()
+        btn = (ev && ev.target) ? ev.target.closest('#btn-lucky-draw') : document.getElementById('btn-lucky-draw')
+        dateIso = (inputDateTournoi && inputDateTournoi.value) ? inputDateTournoi.value : getTodayIso()
+        // Acquire lock immediately to prevent concurrent runs
+        lockToken = acquireLuckyLock(dateIso)
+        if (!lockToken) return
+        try { if (btn) btn.disabled = true } catch (_e) {}
+        try { showBuildToast('LD: lock acquired', 2500) } catch (_e) {}
         const scores = await getScoresTournoi()
+        try { showBuildToast(`LD: scores=${(scores||[]).length}`, 2000) } catch (_e) {}
         if (!scores.length) {
           // Visual feedback so user knows the handler ran but there's no data to act on
           try {
@@ -227,6 +288,7 @@ function getRequiredDivisor (playersOrSize) {
 
         let placesForDate = []
         try { placesForDate = await computeRedistribPlacesFor(dateIso, scores.length) } catch (e) { placesForDate = [] }
+        try { showBuildToast(`LD: placesForDate=${(placesForDate||[]).length}`, 2000) } catch (_e) {}
 
     const sortedByTotal = [...scores].sort((a, b) => {
       const aVals = a.slice(1).map(Number); const aTotal = aVals.length ? aVals[aVals.length - 1] : 0
@@ -349,6 +411,7 @@ function getRequiredDivisor (playersOrSize) {
     }
 
     const seq = buildHighlightSequence(L, totalCycles, winnerIdx)
+    try { showBuildToast('LD: start animation', 2000) } catch (_e) {}
 
     // Schedule visuals and audio using the AudioContext clock when available.
     // Use a RAF-driven loop to sync visuals to the AudioContext time so visuals can
@@ -444,6 +507,7 @@ function getRequiredDivisor (playersOrSize) {
 
     const winnerRow = eligibleRows[winnerIdx]
     const winnerName = winnerRow ? (winnerRow.querySelector('.col-joueur')?.textContent || '').trim() : eligible[0]
+    try { showBuildToast(`LD: winner=${winnerName}`, 4000) } catch (_e) {}
 
     eligibleRows.forEach(r => r.classList.remove('lucky-highlight'))
     if (winnerRow) {
@@ -460,12 +524,14 @@ function getRequiredDivisor (playersOrSize) {
     justFinishedTournamentDate = null
   } catch (e) {
     console.error('Lucky draw failed', e)
-  } finally {
+    try { showBuildToast('LD: error - ' + (e && e.message ? e.message : String(e)), 6000) } catch (_e) {}
+    } finally {
     try {
-      const dateIsoFin = (inputDateTournoi && inputDateTournoi.value) ? inputDateTournoi.value : getTodayIso()
-      // release in-progress lock for this date
-      try { luckyDrawInProgress.delete(dateIsoFin) } catch (_e) {}
+      // release in-progress lock for the original dateIso (only if we own it)
+      try { if (typeof dateIso !== 'undefined') { showBuildToast('LD: releasing lock', 1500); releaseLuckyLock(dateIso, lockToken) } } catch (_e) {}
       await updateLuckyButtonState()
+      // ensure button is re-enabled even if updateLuckyButtonState returned early
+      try { const __btn = document.getElementById('btn-lucky-draw'); if (__btn) __btn.disabled = false } catch (_e) {}
     } catch (_e) {}
   }
 }
@@ -1237,7 +1303,26 @@ let justFinishedTournamentDate = null
 const luckyWinnerByDate = {}          // { 'YYYY-MM-DD': 'Player Name' }
 const rewardedPlayersByDate = {}      // { 'YYYY-MM-DD': Set([...names]) }
 // Guards to prevent double / re-entrant lucky-draw execution for the same date
-const luckyDrawInProgress = new Set()
+// Use a Map(dateIso -> token) so only the owner that acquired the lock can release it.
+const luckyDrawInProgressMap = new Map()
+
+function acquireLuckyLock (isoDate) {
+  try {
+    if (!isoDate) return null
+    if (luckyDrawInProgressMap.has(isoDate)) return null
+    const token = Symbol()
+    luckyDrawInProgressMap.set(isoDate, token)
+    return token
+  } catch (e) { return null }
+}
+
+function releaseLuckyLock (isoDate, token) {
+  try {
+    if (!isoDate) return
+    const cur = luckyDrawInProgressMap.get(isoDate)
+    if (cur && token && cur === token) luckyDrawInProgressMap.delete(isoDate)
+  } catch (e) { /* ignore */ }
+}
 
 // Helpers to manage/clear lucky state
 function clearLuckyForDate (isoDate) {
@@ -1258,13 +1343,13 @@ function clearAllLucky () {
 /* persistLuckyToRecap removed — recap must be updated only on "Fin de tournoi" */
 
 // Update button state by checking both memory and persisted recap
-async function updateLuckyButtonState () {
+    async function updateLuckyButtonState () {
   try {
     const btn = document.getElementById('btn-lucky-draw')
     if (!btn) return
     const dateIso = (inputDateTournoi && inputDateTournoi.value) ? inputDateTournoi.value : getTodayIso()
     // Guard against concurrent/re-entrant execution for the same date
-    if (luckyDrawInProgress.has(dateIso)) return
+    if (luckyDrawInProgressMap.has(dateIso)) return
     // Do NOT acquire the in-progress lock here — locks are added/removed by the
     // actual draw handler to avoid blocking the button permanently.
     // If a lucky winner already exists for this date, clear previous 'chanceux' state
@@ -1279,126 +1364,8 @@ async function updateLuckyButtonState () {
       // ignore errors reading recap
     }
     btn.disabled = false
-  } catch (e) { /* ignore */ }
-}
-
-
-// ------------------ Helper Feedback ------------------
-
-function showConfirmation () {
-  const overlay = document.getElementById('confirmation-overlay')
-  if (overlay) {
-    overlay.classList.remove('hidden')
-    setTimeout(() => {
-      overlay.classList.add('hidden')
-    }, 600)
-  }
-}
-
-// --- Custom HTML dialog system (replaces native alert/confirm/choice on tablet) ---
-function _showCustomDialog (message, buttons) {
-  return new Promise((resolve) => {
-    const overlay = document.getElementById('custom-dialog-overlay')
-    const msgEl = document.getElementById('custom-dialog-message')
-    const btnContainer = document.getElementById('custom-dialog-buttons')
-    if (!overlay || !msgEl || !btnContainer) {
-      // DOM not ready – fall back to native
-      resolve(0)
-      return
-    }
-    msgEl.textContent = message
-    btnContainer.innerHTML = ''
-    btnContainer.className = 'custom-dialog-buttons'
-
-    buttons.forEach((b, i) => {
-      const btn = document.createElement('button')
-      btn.textContent = b.label
-      btn.className = b.cls || 'custom-dialog-btn-primary'
-      btn.addEventListener('click', () => { close(i) })
-      btnContainer.appendChild(btn)
-    })
-
-    overlay.classList.remove('hidden')
-    // Focus first button
-    const first = btnContainer.querySelector('button')
-    if (first) first.focus()
-
-    function onKey (e) {
-      if (e.key === 'Escape') close(buttons.length - 1)
-    }
-    document.addEventListener('keydown', onKey)
-
-    function close (idx) {
-      document.removeEventListener('keydown', onKey)
-      overlay.classList.add('hidden')
-      resolve(idx)
-    }
-  })
-}
-
-// Affiche un dialogue avec un bouton "Imprimer" qui ouvre le contenu dans un
-// nouvel onglet et lance l'impression depuis cet onglet.
-// window.print() sur la page courante ne fonctionne pas sur Chrome Android.
-// onDone est appelé après (nettoyage).
-async function triggerPrint (onDone, filename) {
-  const printContainer = document.getElementById('print-container')
-  if (!printContainer || !printContainer.innerHTML.trim()) {
-    showAlert('Rien à imprimer.')
-    if (onDone) onDone()
-    return
-  }
-  if (!filename) filename = 'export.pdf'
-
-  const overlay = document.getElementById('custom-dialog-overlay')
-  const msgEl = document.getElementById('custom-dialog-message')
-  const btnContainer = document.getElementById('custom-dialog-buttons')
-  if (!overlay || !msgEl || !btnContainer) {
-    if (onDone) onDone()
-    return
-  }
-
-  // Afficher directement le message de génération (pas d'étape intermédiaire)
-  msgEl.textContent = 'Génération du PDF en cours…'
-  btnContainer.innerHTML = ''
-  overlay.classList.remove('hidden')
-
-  try {
-    const pdfBlob = await _generatePDF(printContainer)
-    const url = URL.createObjectURL(pdfBlob)
-
-    // Tenter le téléchargement automatique
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-
-    // Succès : afficher brièvement puis proposer de fermer
-    msgEl.textContent = '✅ PDF téléchargé !'
-    btnContainer.innerHTML = ''
-    const btnClose = document.createElement('button')
-    btnClose.textContent = 'OK'
-    btnClose.className = 'custom-dialog-btn-primary'
-    btnClose.addEventListener('click', () => {
-      URL.revokeObjectURL(url)
-      overlay.classList.add('hidden')
-      if (onDone) onDone()
-    })
-    btnContainer.appendChild(btnClose)
-    btnClose.focus()
   } catch (err) {
-    console.error('Erreur PDF:', err)
-    msgEl.textContent = 'Erreur : ' + (err.message || err)
-    btnContainer.innerHTML = ''
-    const btnClose = document.createElement('button')
-    btnClose.textContent = 'Fermer'
-    btnClose.className = 'custom-dialog-btn-secondary'
-    btnClose.addEventListener('click', () => {
-      overlay.classList.add('hidden')
-      if (onDone) onDone()
-    })
-    btnContainer.appendChild(btnClose)
+    console.warn('updateLuckyButtonState failed', err)
   }
 }
 
@@ -1487,6 +1454,72 @@ async function _generatePDF (container) {
     return pdf.output('blob')
   } finally {
     container.style.display = prevDisplay
+  }
+}
+
+// Affiche un dialogue avec un bouton "Imprimer" qui ouvre le contenu dans un
+// nouvel onglet et lance l'impression depuis cet onglet.
+// window.print() sur la page courante ne fonctionne pas sur Chrome Android.
+// onDone est appelé après (nettoyage).
+async function triggerPrint (onDone, filename) {
+  const printContainer = document.getElementById('print-container')
+  if (!printContainer || !printContainer.innerHTML.trim()) {
+    showAlert('Rien à imprimer.')
+    if (onDone) onDone()
+    return
+  }
+  if (!filename) filename = 'export.pdf'
+
+  const overlay = document.getElementById('custom-dialog-overlay')
+  const msgEl = document.getElementById('custom-dialog-message')
+  const btnContainer = document.getElementById('custom-dialog-buttons')
+  if (!overlay || !msgEl || !btnContainer) {
+    if (onDone) onDone()
+    return
+  }
+
+  // Afficher directement le message de génération (pas d'étape intermédiaire)
+  msgEl.textContent = 'Génération du PDF en cours…'
+  btnContainer.innerHTML = ''
+  overlay.classList.remove('hidden')
+
+  try {
+    const pdfBlob = await _generatePDF(printContainer)
+    const url = URL.createObjectURL(pdfBlob)
+
+    // Tenter le téléchargement automatique
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+
+    // Succès : afficher brièvement puis proposer de fermer
+    msgEl.textContent = '✅ PDF téléchargé !'
+    btnContainer.innerHTML = ''
+    const btnClose = document.createElement('button')
+    btnClose.textContent = 'OK'
+    btnClose.className = 'custom-dialog-btn-primary'
+    btnClose.addEventListener('click', () => {
+      URL.revokeObjectURL(url)
+      overlay.classList.add('hidden')
+      if (onDone) onDone()
+    })
+    btnContainer.appendChild(btnClose)
+    btnClose.focus()
+  } catch (err) {
+    console.error('Erreur PDF:', err)
+    msgEl.textContent = 'Erreur : ' + (err.message || err)
+    btnContainer.innerHTML = ''
+    const btnClose = document.createElement('button')
+    btnClose.textContent = 'Fermer'
+    btnClose.className = 'custom-dialog-btn-secondary'
+    btnClose.addEventListener('click', () => {
+      overlay.classList.add('hidden')
+      if (onDone) onDone()
+    })
+    btnContainer.appendChild(btnClose)
   }
 }
 
@@ -1760,6 +1793,47 @@ function showToast (message, timeout = 2500) {
   }
 }
 
+// Show a small validation bubble near an input element briefly.
+function showValidationBubble (inputEl, message, timeout = 3000) {
+  try {
+    if (!inputEl || !inputEl.getBoundingClientRect) { showToast(message); return }
+    const rect = inputEl.getBoundingClientRect()
+    const bubble = document.createElement('div')
+    bubble.className = 'validation-bubble'
+    bubble.textContent = message
+    // Basic inline styling to ensure visibility without external CSS
+    bubble.style.position = 'fixed'
+    bubble.style.zIndex = 20000
+    bubble.style.background = 'rgba(0,0,0,0.88)'
+    bubble.style.color = '#fff'
+    bubble.style.padding = '6px 10px'
+    bubble.style.borderRadius = '6px'
+    bubble.style.fontSize = '13px'
+    bubble.style.boxShadow = '0 6px 18px rgba(0,0,0,0.45)'
+    // place above the input if space, otherwise below
+    const top = Math.max(8, rect.top - 44)
+    const left = Math.max(8, rect.left)
+    bubble.style.top = `${top}px`
+    bubble.style.left = `${left}px`
+    document.body.appendChild(bubble)
+    // animate fade in
+    bubble.style.opacity = '0'
+    bubble.getBoundingClientRect()
+    bubble.style.transition = 'opacity 180ms ease-out, transform 180ms ease-out'
+    bubble.style.transform = 'translateY(6px)'
+    requestAnimationFrame(() => { bubble.style.opacity = '1'; bubble.style.transform = 'translateY(0)' })
+    setTimeout(() => {
+      try {
+        bubble.style.opacity = '0'
+        bubble.style.transform = 'translateY(-6px)'
+        setTimeout(() => { try { document.body.removeChild(bubble) } catch (_e) {} }, 220)
+      } catch (_e) {}
+    }, timeout)
+  } catch (e) {
+    try { showToast(message) } catch (_e) {}
+  }
+}
+
 // ------------------ Utilitaires date ------------------
 
 // Central helper: source of "today" (allows tests to override via window or localStorage)
@@ -1931,7 +2005,11 @@ async function updateRotationsDisplay () {
 
   const rotationsKeys = Object.keys(dernierDictRotations)
 
-  rotationsResultDiv.innerHTML = rotationsKeys
+  // Prévenir le flash: cacher le conteneur avant insertion du HTML,
+  // appliquer les règles, puis réafficher.
+  try { if (rotationsResultDiv) rotationsResultDiv.style.visibility = 'hidden' } catch (_e) {}
+
+  const htmlForRotations = rotationsKeys
     .map((nomRot, mancheIndex) => {
       const tables = dernierDictRotations[nomRot] || []
       let excluPourManche = exclus[mancheIndex] || null
@@ -1992,6 +2070,8 @@ async function updateRotationsDisplay () {
         ? `<h3>Manche ${mancheIndex + 1} <span class="rotation-exclu-inline">${headerLabel}: <strong>${excluPourManche}</strong></span></h3>`
         : `<h3>Manche ${mancheIndex + 1}</h3>`
 
+      // Simple template for each manche; visibility will be adjusted after
+      // l'insertion du HTML afin de garder la logique de rendu séparée.
       return `
         <section class="rotation-block">
           ${headerHtml}
@@ -2002,6 +2082,52 @@ async function updateRotationsDisplay () {
       `
     })
     .join('')
+
+  // Build off-DOM to avoid flashes: create a temporary container,
+  // apply visibility rules there, then swap into the real container.
+  const tmp = document.createElement('div')
+  tmp.innerHTML = htmlForRotations
+
+  // Post-render: appliquer les règles de visibilité par manche sur tmp.
+  await (async function applyMancheVisibilityRules () {
+    try {
+      const modeExclu = (typeof getMode === 'function' && getMode() === 'exclu')
+      const selIdx = (selectRotation && typeof selectRotation.selectedIndex === 'number') ? selectRotation.selectedIndex : 0
+      const totalNbManches = Number(nbPartiesInput && nbPartiesInput.value || 0)
+      const serpentinOn = (typeof getSerpentinEnabled === 'function' && getSerpentinEnabled())
+      const sections = Array.from(tmp.querySelectorAll('section.rotation-block'))
+
+      // If not exclu mode and not serpentin, nothing to do.
+      if (!modeExclu && !serpentinOn) return
+
+      // When in exclu mode, ensure there is an exclu configured; otherwise avoid masking.
+      let exclusArr = []
+      try { if (modeExclu && typeof getExclusTournoi === 'function') { exclusArr = await getExclusTournoi() || [] } } catch (_e) { exclusArr = [] }
+
+      sections.forEach((sec, idx) => {
+        sec.classList.remove('hidden')
+        if (modeExclu) {
+          if (!Array.isArray(exclusArr) || exclusArr.length === 0) return
+          if (idx > selIdx) sec.classList.add('hidden')
+        } else if (serpentinOn && totalNbManches >= 2 && idx === totalNbManches - 1) {
+          // dernière manche en serpentin : n'afficher que si l'avant-dernière est validée
+          const prevIdx = idx - 1
+          const prevRotName = rotationsKeys && rotationsKeys[prevIdx] ? rotationsKeys[prevIdx] : null
+          let prevSnap = null
+          try { prevSnap = prevRotName ? loadValidatedMancheSnapshot(prevRotName) : null } catch (_e) { prevSnap = null }
+          if (!prevSnap) sec.classList.add('hidden')
+        }
+      })
+    } catch (_e) { /* ignore */ }
+  })()
+  // Swap prepared content into visible container in one operation.
+  try {
+    if (rotationsResultDiv) rotationsResultDiv.innerHTML = tmp.innerHTML
+  } catch (_e) {
+    try { rotationsResultDiv.innerHTML = htmlForRotations } catch (_err) {}
+  }
+
+  try { if (rotationsResultDiv) rotationsResultDiv.style.visibility = '' } catch (_e) {}
 
   // Marquer visuellement dans la liste le joueur exclu de la rotation sélectionnée (si applicable)
   try {
@@ -2169,156 +2295,41 @@ async function applyExclusToRotations (exclusArr) {
 
 // ------------------ Joueurs / tirage ------------------
 
-// --- Manual composition (first round) UI state ---
-const compOverlay = document.getElementById('composition-overlay')
-const compAvailableList = document.getElementById('comp-available-list')
-const compArrangedList = document.getElementById('comp-arranged-list')
-const btnManualComposition = document.getElementById('btn-manual-composition')
-const compValidateBtn = document.getElementById('comp-validate')
-const compCancelBtn = document.getElementById('comp-cancel')
+// Manual composition: extracted to lib; initialize with app API
+const { openCompositionModal: _openCompositionModal, closeCompositionModal: _closeCompositionModal, syncCompositionToPlan: _syncCompositionToPlan } = initComposition({
+  getListeTournoi: () => listeTournoi,
+  setListeTournoi: (v) => { listeTournoi = v },
+  getDernierFullTirage: () => dernierFullTirage,
+  setDernierFullTirage: (v) => { dernierFullTirage = v },
+  getDernierDictRotations: () => dernierDictRotations,
+  setDernierDictRotations: (v) => { dernierDictRotations = v },
+  getExclusTournoi,
+  buildDictRotationsWithExclus,
+  updateRotationsDisplay,
+  mettreAJourSelectRotationsEtTables,
+  renderListeTournoi,
+  renderListeGenerale,
+  scheduleSaveListeTournoi,
+  setMode,
+  getMode,
+  getMortsDivisor,
+  askChoiceVertical,
+  showAlert,
+  showToast,
+  getScoresTournoi,
+  setScoresTournoi,
+  saveTirage,
+  clearAllLucky,
+  renderFeuilleSoiree,
+  updateLuckyButtonState,
+  applyExclusToRotations
+})
 
-async function openCompositionModal () {
-  if (!compOverlay) return
-  // Build available list — include any `Mort` placeholders so they can be placed
-  // but in mode 'exclu' remove the excluded player(s) from the available set
-  let avail = (listeTournoi || []).filter(n => n && String(n).trim() !== '')
-  try {
-    if (typeof getMode === 'function' && getMode() === 'exclu') {
-      const exclusArr = (await getExclusTournoi()) || []
-      const exclSet = new Set((exclusArr || []).filter(Boolean))
-      avail = avail.filter(n => !exclSet.has(n))
-    }
-  } catch (_e) { /* ignore */ }
-  compAvailableList.innerHTML = avail.map((n) => {
-    const isMort = String(n).toUpperCase().startsWith('MORT')
-    const cls = isMort ? 'comp-item mort' : 'comp-item'
-    return `<div class="${cls}" data-nom="${encodeURIComponent(n)}">${n}</div>`
-  }).join('')
-  compArrangedList.innerHTML = ''
-  compOverlay.classList.remove('hidden')
-  // focus the overlay for accessibility so it becomes visible immediately
-  try { compOverlay.focus() } catch (_e) {}
+// Expose names used elsewhere in file
+const openCompositionModal = _openCompositionModal
+const closeCompositionModal = _closeCompositionModal
+const syncCompositionToPlan = _syncCompositionToPlan
 
-  // show a live preview on the plan while composing
-  try { syncCompositionToPlan() } catch (_e) {}
-} 
-
-function closeCompositionModal () {
-  if (!compOverlay) return
-  compOverlay.classList.add('hidden')
-  // If we were previewing a composition, restore previous rotations state
-  try {
-    if (compositionPreviewBackup) {
-      dernierFullTirage = compositionPreviewBackup.dernierFullTirage
-      dernierDictRotations = compositionPreviewBackup.dernierDictRotations
-      compositionPreviewBackup = null
-    }
-  } catch (_e) {}
-  try { updateRotationsDisplay() } catch (_e) {}
-}
-
-// click handlers for composition modal (event delegation)
-let compositionPreviewBackup = null
-
-async function syncCompositionToPlan () {
-  try {
-    const arranged = Array.from(compArrangedList.querySelectorAll('.comp-item')).map(el => decodeURIComponent(el.dataset.nom || ''))
-    // fill remaining players (preserve order of listeTournoi excluding already arranged)
-    // Exclude the current exclu when in 'exclu' mode so they are not placed.
-    let remaining = (listeTournoi || []).filter(n => n && !arranged.includes(n))
-    try {
-      if (typeof getMode === 'function' && getMode() === 'exclu') {
-        const exclusArr = (await getExclusTournoi()) || []
-        const exclSet = new Set((exclusArr || []).filter(Boolean))
-        remaining = remaining.filter(n => !exclSet.has(n))
-      }
-    } catch (_e) { /* ignore */ }
-    const fullOrder = [...arranged, ...remaining]
-
-    // Reinsert excluded players into the preview ordering so the Plan and
-    // Saisie UIs still display exclusion labels. We preserve the original
-    // `listeTournoi` ordering for excluded player positions when available.
-    const exclusArr = await getExclusTournoi().catch(() => [])
-    const exclSet = new Set((exclusArr || []).filter(Boolean))
-    const baseOrder = (Array.isArray(dernierFullTirage) && dernierFullTirage.length)
-      ? dernierFullTirage.map(p => p.nom)
-      : (listeTournoi || [])
-
-    const previewFullTirage = []
-    let ptr = 0
-    for (let i = 0; i < baseOrder.length; i++) {
-      const name = baseOrder[i]
-      if (exclSet.has(name)) {
-        previewFullTirage.push({ nom: name, numero: previewFullTirage.length + 1 })
-      } else {
-        const nm = fullOrder[ptr++] || name
-        previewFullTirage.push({ nom: nm, numero: previewFullTirage.length + 1 })
-      }
-    }
-    // Append any leftover composed names (defensive)
-    while (ptr < fullOrder.length) {
-      previewFullTirage.push({ nom: fullOrder[ptr++], numero: previewFullTirage.length + 1 })
-    }
-
-    // backup current rotations only once when starting preview
-    if (!compositionPreviewBackup) {
-      compositionPreviewBackup = { dernierFullTirage: dernierFullTirage, dernierDictRotations: dernierDictRotations }
-    }
-
-    // compute rotations for preview and render
-    try {
-      const exclusArr = await getExclusTournoi()
-      const nbPartiesToPlan = (cbSerpentin && cbSerpentin.checked && Number(nbPartiesInput.value || 1) > 1) ? Number(nbPartiesInput.value || 1) - 1 : Number(nbPartiesInput.value || 1)
-      const dict = buildDictRotationsWithExclus(previewFullTirage, exclusArr, nbPartiesToPlan)
-      // temporarily apply for display
-      dernierFullTirage = previewFullTirage
-      dernierDictRotations = dict
-      await updateRotationsDisplay()
-      // Also refresh selects / accessibility state so other screens (Feuille) reflect the preview
-      try {
-        if (typeof mettreAJourSelectRotationsEtTables === 'function') await mettreAJourSelectRotationsEtTables()
-      } catch (_e) { /* ignore */ }
-    } catch (e) {
-      console.warn('syncCompositionToPlan failed', e)
-    }
-  } catch (e) {
-    console.warn('syncCompositionToPlan outer failed', e)
-  }
-}
-
-if (compAvailableList && compArrangedList) {
-  compAvailableList.addEventListener('click', (ev) => {
-    const it = ev.target.closest('.comp-item')
-    if (!it) return
-    const name = decodeURIComponent(it.dataset.nom || '')
-    // move to arranged (append at end)
-    const placed = document.createElement('div')
-    placed.className = 'comp-item placed'
-    placed.dataset.nom = encodeURIComponent(name)
-    placed.textContent = name
-    compArrangedList.appendChild(placed)
-    it.remove()
-    // sync live preview
-    try { syncCompositionToPlan() } catch (_e) {}
-  })
-
-  compArrangedList.addEventListener('click', (ev) => {
-    const it = ev.target.closest('.comp-item')
-    if (!it) return
-    const name = decodeURIComponent(it.dataset.nom || '')
-    // move back to available (append)
-    const back = document.createElement('div')
-    back.className = 'comp-item'
-    back.dataset.nom = encodeURIComponent(name)
-    back.textContent = name
-    compAvailableList.appendChild(back)
-    it.remove()
-    // sync live preview
-    try { syncCompositionToPlan() } catch (_e) {}
-  })
-}
-
-if (btnManualComposition) btnManualComposition.addEventListener('click', openCompositionModal)
 // also expose a quick access button in 'Joueurs / Tirage' if present
 const btnManualCompositionJoueurs = document.getElementById('btn-manual-composition-joueurs')
 if (btnManualCompositionJoueurs) btnManualCompositionJoueurs.addEventListener('click', async () => {
@@ -2411,123 +2422,7 @@ if (btnManualCompositionJoueurs) btnManualCompositionJoueurs.addEventListener('c
 
 // Delegated fallback: open modal when either button is clicked even if earlier listeners failed
 // Ensure preview/heading updated when this fallback is used.
-document.addEventListener('click', async (ev) => {
-  const btn = ev.target.closest && ev.target.closest('#btn-manual-composition, #btn-manual-composition-joueurs')
-  if (btn) {
-    try { await syncCompositionToPlan() } catch (_e) { /* ignore */ }
-    try { const planBtn = document.querySelector('nav button[data-screen="plan"]'); if (planBtn) planBtn.click() } catch (_e) { /* ignore */ }
-    try { openCompositionModal() } catch (e) { console.warn('openCompositionModal failed (delegated):', e) }
-  }
-})
-if (compCancelBtn) compCancelBtn.addEventListener('click', closeCompositionModal)
-if (compValidateBtn) compValidateBtn.addEventListener('click', async () => {
-  // build arranged list
-  const arranged = Array.from(compArrangedList.querySelectorAll('.comp-item')).map(el => decodeURIComponent(el.dataset.nom || ''))
-  if (!arranged.length) {
-    showAlert('Aucune composition fournie — annulation')
-    closeCompositionModal()
-    return
-  }
-
-  // complete the ordering with remaining players (preserve listeTournoi order)
-  let remaining = (listeTournoi || []).filter(n => n && !String(n).toUpperCase().startsWith('MORT') && !arranged.includes(n))
-  try {
-    if (typeof getMode === 'function' && getMode() === 'exclu') {
-      const exclusArr = (await getExclusTournoi()) || []
-      const exclSet = new Set((exclusArr || []).filter(Boolean))
-      remaining = remaining.filter(n => !exclSet.has(n))
-    }
-  } catch (_e) { /* ignore */ }
-  const fullOrder = [...arranged, ...remaining]
-
-  // Reinsert excluded players into the final ordering so they remain present
-  // in `listeTournoi` (and are labeled in the Plan / Saisie). Preserve
-  // relative positions from the previous `listeTournoi` when possible.
-  const exclusArr = await getExclusTournoi().catch(() => [])
-  const exclSet = new Set((exclusArr || []).filter(Boolean))
-  const baseOrder = (Array.isArray(dernierFullTirage) && dernierFullTirage.length)
-    ? dernierFullTirage.map(p => p.nom)
-    : (listeTournoi || [])
-
-  const finalOrder = []
-  let ptr = 0
-  for (let i = 0; i < baseOrder.length; i++) {
-    const name = baseOrder[i]
-    if (exclSet.has(name)) {
-      finalOrder.push(name)
-    } else {
-      finalOrder.push(fullOrder[ptr++] || name)
-    }
-  }
-  // Append leftovers defensively
-  while (ptr < fullOrder.length) finalOrder.push(fullOrder[ptr++])
-
-  const full = finalOrder.map((nm, idx) => ({ nom: nm, numero: idx + 1 }))
-
-  // Persist and apply as the canonical full tirage
-  dernierFullTirage = full
-  try { localStorage.setItem('tarot_full_tirage', JSON.stringify(dernierFullTirage)) } catch (_e) {}
-
-  // Update listeTournoi & initial scores (same behaviour as tirage au sort)
-  try {
-    listeTournoi = full.map(p => p.nom)
-    renderListeTournoi()
-    await renderListeGenerale()
-    scheduleSaveListeTournoi()
-  } catch (e) { console.warn('Failed to update listeTournoi from manual composition', e) }
-
-  // Initialize scores tournoi (Nom, Total=0)
-  try {
-    const initScores = listeTournoi.map(nom => [nom, 0])
-    await setScoresTournoi(initScores)
-  } catch (e) { console.warn('Failed to set initial scores from composition', e) }
-
-  // Rebuild rotations based on this full tirage
-  try {
-    const excluArr = await getExclusTournoi()
-    const nbPartiesToPlan = (cbSerpentin && cbSerpentin.checked && Number(nbPartiesInput.value || 1) > 1) ? Number(nbPartiesInput.value || 1) - 1 : Number(nbPartiesInput.value || 1)
-    dernierDictRotations = buildDictRotationsWithExclus(dernierFullTirage, excluArr, nbPartiesToPlan)
-    try { await applyExclusToRotations(excluArr) } catch (_e) { /* ignore */ }
-  } catch (e) {
-    console.warn('Failed to build rotations from manual composition', e)
-  }
-
-  // Persist tirage and UI updates
-  try { saveTirage(full) } catch (_e) {}
-  try { await updateRotationsDisplay() } catch (_e) {}
-
-  // Reset any in-memory lucky/reward state and refresh feuille
-  try { clearAllLucky() } catch (_e) {}
-  try { await renderFeuilleSoiree() } catch (_e) {}
-  try {
-    await updateLuckyButtonState()
-  } catch (_e) {}
-
-  // Diagnostics to help compare manual composition vs tirage au sort
-  try {
-    const dateIsoDiag = (inputDateTournoi && inputDateTournoi.value) ? inputDateTournoi.value : getTodayIso()
-    const scoresNow = await getScoresTournoi()
-    let placesDiag = []
-    try { placesDiag = await computeRedistribPlacesFor(dateIsoDiag, (scoresNow || []).length) } catch (_e) { placesDiag = [] }
-
-    const tbodyRowsDiag = Array.from((document.getElementById('tbody-soiree') || tbodySoiree).querySelectorAll('tr'))
-    const tbodyMap = tbodyRowsDiag.map(tr => {
-      const ds = tr.dataset && tr.dataset.nom ? (decodeURIComponent(tr.dataset.nom) || '') : ''
-      const disp = String((tr.querySelector('.col-joueur') || {}).textContent || '').trim()
-      const gain = tr.querySelector('.col-gain') ? (tr.querySelector('.col-gain').textContent || '').trim() : ''
-      return { ds, disp, key: normalizeNom(ds || disp), gain }
-    })
-
-    const displayedGainKeys = tbodyMap.filter(r => r.gain && r.gain !== '').map(r => r.key)
-  } catch (_e) { /* ignore diag errors */ }
-
-
-
-  // clear preview backup (we accepted it)
-  compositionPreviewBackup = null
-
-  closeCompositionModal()
-})
+// Composition events are handled inside the composition module.
 
 
 function renderListeTournoi () {
