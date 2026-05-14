@@ -2146,25 +2146,31 @@ async function updateRotationsDisplay () {
 
   // Post-render: ensure excluded players are visibly labelled even if
   // exclusion state wasn't represented upstream. This is purely UI-only.
+  // IMPORTANT: appliquer le label uniquement dans la section de la manche concernée,
+  // pas globalement sur toutes les manches (sinon un joueur exclu en manche 2 serait
+  // incorrectement marqué "Exclu" dans la manche 1 où il joue normalement).
   try {
     const exclus = await getExclusTournoi().catch(() => [])
     if (Array.isArray(exclus) && exclus.length && rotationsResultDiv) {
-      const spans = rotationsResultDiv.querySelectorAll('.rotation-tables .table-seat span')
-      spans.forEach(s => {
+      const sections = rotationsResultDiv.querySelectorAll('section.rotation-block')
+      sections.forEach((sec, mancheIdx) => {
         try {
-          const txt = (s.textContent || '').trim()
-          exclus.forEach((exclName) => {
-            if (!exclName) return
-            const exclTrim = String(exclName).trim()
-            if (!exclTrim) return
-            if (txt === exclTrim) {
-              // apply visual label similar to template logic
-              const isMort = String(exclTrim).toUpperCase().includes('MORT')
-              if (isMort) s.innerHTML = `<span class="seat-mort">Mort</span>`
-              else s.innerHTML = `<span class="exclu-inline">Exclu</span>`
-            }
+          const exclForManche = exclus[mancheIdx] || null
+          if (!exclForManche) return
+          const exclTrim = String(exclForManche).trim()
+          if (!exclTrim) return
+          const spans = sec.querySelectorAll('.rotation-tables .table-seat span')
+          spans.forEach(s => {
+            try {
+              const txt = (s.textContent || '').trim()
+              if (txt === exclTrim) {
+                const isMort = String(exclTrim).toUpperCase().includes('MORT')
+                if (isMort) s.innerHTML = `<span class="seat-mort">Mort</span>`
+                else s.innerHTML = `<span class="exclu-inline">Exclu</span>`
+              }
+            } catch (_e) { /* ignore per-seat errors */ }
           })
-        } catch (_e) { /* ignore per-seat errors */ }
+        } catch (_e) { /* ignore per-section errors */ }
       })
     }
   } catch (_e) { /* ignore decoration errors */ }
