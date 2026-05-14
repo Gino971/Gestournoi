@@ -39,10 +39,10 @@ import {
   setRecap,
   getExclusTournoi,
   setExclusTournoi
-} from './api.js'
+} from './api.js?v=17'
 
-import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js'
-import { computeEligible } from './lucky-utils.js'
+import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=17'
+import { computeEligible } from './lucky-utils.js?v=17'
 import {
   tirageAuSort,
   transfertTotauxTable,
@@ -51,13 +51,13 @@ import {
   distributeAttackerScore,
   validateAttackerDivisibility,
   placeAttackerAtIndex
-} from './coreTournoi.js'
-import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js'
-import { generateSerpentinTables } from './serpentin.js'
-import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js'
-import { buildClassementFromRecap } from './lib/classement-utils.js'
-import { askConfirm, _showCustomDialog } from './lib/dialogs.js'
-import { initComposition } from './lib/composition.js'
+} from './coreTournoi.js?v=17'
+import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=17'
+import { generateSerpentinTables } from './serpentin.js?v=17'
+import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=17'
+import { buildClassementFromRecap } from './lib/classement-utils.js?v=17'
+import { askConfirm, _showCustomDialog } from './lib/dialogs.js?v=17'
+import { initComposition } from './lib/composition.js?v=17'
 // Temporary build identifier for manual served-file verification (do not commit)
 const FRONTEND_BUILD_ID = 'frontend-build-2026-04-17T23:30:00Z'
 
@@ -1132,7 +1132,7 @@ if (btnRestaurationNav) {
 const planHeadingEl = document.getElementById('plan-heading')
 
 // Minuteur
-import initTimer from './timer.js'
+import initTimer from './timer.js?v=17'
 try { initTimer() } catch (_e) { /* ignore if timer DOM not ready */ }
 
 
