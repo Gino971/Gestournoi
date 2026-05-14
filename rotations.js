@@ -178,32 +178,79 @@ export function computeActiveFromBase (base, seatIndex, exclu) {
 
 // Fonction pour forcer les Morts au Nord (échange avec le joueur Nord si besoin)
 function corrigerPositionMorts (dict) {
-  for (const rotName in dict) {
+  const rotNames = Object.keys(dict)
+  if (rotNames.length === 0) return dict
+
+  // Déterminer la table cible de chaque Mort à partir de la première manche
+  const firstRot = dict[rotNames[0]]
+  const desiredTableByMort = {} // key: mortNameUpper -> tableIdx
+
+  firstRot.forEach((t, tIdx) => {
+    t.joueurs = t.joueurs || []
+    t.joueurs.forEach((j, seatIdx) => {
+      if (j && j.nom && String(j.nom).toUpperCase().includes('MORT')) {
+        desiredTableByMort[String(j.nom).toUpperCase()] = tIdx
+      }
+    })
+  })
+
+  const mortNames = Object.keys(desiredTableByMort)
+  if (mortNames.length === 0) return dict
+
+  // Pour chaque rotation, déplacer chaque Mort vers sa table cible (si nécessaire)
+  for (const rotName of rotNames) {
     const tables = dict[rotName]
-    for (const t of tables) {
-      // t.joueurs = [N, S, E, O]
-      const [N, S, E, O] = t.joueurs
-      const joueurs = [N, S, E, O]
+    // Construire index rapide : tableIdx -> joueurs array
+    tables.forEach(t => { t.joueurs = t.joueurs || [] })
 
-      // On cherche l'index d'un Mort (le premier trouvé s'il y en a plusieurs)
-      // On ignore l'index 0 (Nord) car s'il est déjà au Nord, c'est bon.
-      const indexMort = joueurs.findIndex((j, idx) => idx > 0 && j.nom.toUpperCase().includes('MORT'))
-
-      if (indexMort > 0) {
-        // On a trouvé un Mort qui n'est pas au Nord (indexMort = 1, 2 ou 3)
-        // On échange avec le Nord (index 0)
-        // ATTENTION : Cela déplace le joueur initialement prévu au Nord.
-        // Dans un mouvement Mitchell (5+ tables), le Nord est censé être fixe.
-        // Si on déplace un Vivant du Nord pour mettre un Mort, le Vivant devient mobile (S, E ou O).
-        const temp = joueurs[0]
-        joueurs[0] = joueurs[indexMort]
-        joueurs[indexMort] = temp
-
-        // Mise à jour du tableau
-        t.joueurs = joueurs
+    // Recenser positions actuelles des Morts
+    const mortPositions = {}
+    mortNames.forEach(mn => { mortPositions[mn] = null })
+    for (let tIdx = 0; tIdx < tables.length; tIdx++) {
+      const t = tables[tIdx]
+      for (let s = 0; s < t.joueurs.length; s++) {
+        const p = t.joueurs[s]
+        if (p && p.nom && String(p.nom).toUpperCase().includes('MORT')) {
+          mortPositions[String(p.nom).toUpperCase()] = { table: tIdx, seat: s, player: p }
+        }
       }
     }
+
+    // Préparer mapping des occupants nord initiaux pour remplacements
+    const targetNorthOriginal = {}
+    mortNames.forEach(mn => {
+      const targetIdx = desiredTableByMort[mn]
+      if (typeof targetIdx === 'number' && targetIdx >= 0 && targetIdx < tables.length) {
+        targetNorthOriginal[mn] = tables[targetIdx].joueurs[0] || null
+      } else {
+        targetNorthOriginal[mn] = null
+      }
+    })
+
+    // Effectuer les déplacements : pour chaque mort, mettre le mort au nord
+    // de la table cible et remettre l'occupant nord original à la position source du mort.
+    mortNames.forEach(mn => {
+      const pos = mortPositions[mn]
+      const targetIdx = desiredTableByMort[mn]
+      if (!pos || typeof targetIdx !== 'number') return
+
+      // Si déjà au bon emplacement et au siège Nord, rien à faire
+      if (pos.table === targetIdx && pos.seat === 0) return
+
+      const srcTableObj = tables[pos.table]
+      const targetTableObj = tables[targetIdx]
+
+      const mortPlayer = pos.player
+      const origNorth = targetTableObj.joueurs[0] || null
+
+      // Put mort at north of target
+      targetTableObj.joueurs[0] = mortPlayer
+
+      // Put original north into the mort's old seat
+      srcTableObj.joueurs[pos.seat] = origNorth
+    })
   }
+
   return dict
 }
 

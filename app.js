@@ -646,13 +646,18 @@ async function tirageHasRun () {
 }
 
 // --- Redistrib banner helpers (only banner; calculations/columns remain removed) ---
+let _redistribDefaultsCache = null
 async function fetchRedistribDefaults () {
+  if (_redistribDefaultsCache !== null) return _redistribDefaultsCache
   // Preferred: ask main process (works for packaged app and dev)
   try {
     if (window && window.electronAPI && typeof window.electronAPI.readData === 'function') {
       try {
         const ipcData = await window.electronAPI.readData('redistributions')
-        if (ipcData && Object.keys(ipcData).length > 0) return ipcData
+        if (ipcData && Object.keys(ipcData).length > 0) {
+          _redistribDefaultsCache = ipcData
+          return _redistribDefaultsCache
+        }
       } catch (e) {
         console.warn('ipc readData(redistributions) failed', e)
       }
@@ -662,23 +667,33 @@ async function fetchRedistribDefaults () {
   // Fallback: API backend (mode web / tablette)
   try {
     const res = await fetch('/api/redistributions')
-    if (res.ok) return await res.json()
+    if (res.ok) {
+      _redistribDefaultsCache = await res.json()
+      return _redistribDefaultsCache
+    }
   } catch (_e) { /* ignore */ }
 
   // Fallback: static fetch (useful for dev server / non-electron web mode)
   try {
     const res = await fetch('./build/defaults/redistributions.json')
-    if (res.ok) return await res.json()
+    if (res.ok) {
+      _redistribDefaultsCache = await res.json()
+      return _redistribDefaultsCache
+    }
   } catch (e) {
     try {
       const r2 = await fetch('/build/defaults/redistributions.json')
-      if (r2.ok) return await r2.json()
+      if (r2.ok) {
+        _redistribDefaultsCache = await r2.json()
+        return _redistribDefaultsCache
+      }
     } catch (_e) {
       /* ignore */
     }
   }
 
-  return {}
+  _redistribDefaultsCache = {}
+  return _redistribDefaultsCache
 }
 
 async function computeRedistribPlacesFor (isoDate, nbJoueurs) {
@@ -1293,6 +1308,8 @@ let validatedEditMode = true
 
 // Guard for concurrent Saisie renders
 let _renderingSaisieLock = false
+// Si un render est demandé pendant qu'un autre est en cours, on le rejoue une fois à la fin
+let _pendingRenderSaisie = false
 // remember the last rotation key rendered so we can detect manual switches
 let _lastRenderedRotation = null
 // Redistribution feature removed — no runtime state kept
@@ -2127,12 +2144,48 @@ async function updateRotationsDisplay () {
     try { rotationsResultDiv.innerHTML = htmlForRotations } catch (_err) {}
   }
 
+  // Post-render: ensure excluded players are visibly labelled even if
+  // exclusion state wasn't represented upstream. This is purely UI-only.
+  try {
+    const exclus = await getExclusTournoi().catch(() => [])
+    if (Array.isArray(exclus) && exclus.length && rotationsResultDiv) {
+      const spans = rotationsResultDiv.querySelectorAll('.rotation-tables .table-seat span')
+      spans.forEach(s => {
+        try {
+          const txt = (s.textContent || '').trim()
+          exclus.forEach((exclName) => {
+            if (!exclName) return
+            const exclTrim = String(exclName).trim()
+            if (!exclTrim) return
+            if (txt === exclTrim) {
+              // apply visual label similar to template logic
+              const isMort = String(exclTrim).toUpperCase().includes('MORT')
+              if (isMort) s.innerHTML = `<span class="seat-mort">Mort</span>`
+              else s.innerHTML = `<span class="exclu-inline">Exclu</span>`
+            }
+          })
+        } catch (_e) { /* ignore per-seat errors */ }
+      })
+    }
+  } catch (_e) { /* ignore decoration errors */ }
+
   try { if (rotationsResultDiv) rotationsResultDiv.style.visibility = '' } catch (_e) {}
 
   // Marquer visuellement dans la liste le joueur exclu de la rotation sélectionnée (si applicable)
   try {
     const selIdx = (selectRotation && typeof selectRotation.selectedIndex === 'number') ? selectRotation.selectedIndex : 0
     markExcluInList(exclus[selIdx] || null)
+  } catch (_e) { /* ignore */ }
+
+  // Ensure excluded player is marked in the Saisie (score) UI too
+  try {
+    const selIdx = (selectRotation && typeof selectRotation.selectedIndex === 'number') ? selectRotation.selectedIndex : 0
+    const exclNom = exclus[selIdx] || null
+    if (exclNom) {
+      try { setFeuilleExcluInfo(exclNom, selIdx) } catch (_e) {}
+    } else {
+      try { setFeuilleExcluInfo(null, selIdx) } catch (_e) {}
+    }
   } catch (_e) { /* ignore */ }
 
   // Assurer que l'en-tête du plan affiche le même libellé de mouvement que lors du "Tirage au sort".
@@ -2207,7 +2260,30 @@ function buildDictRotationsWithExclus (fullTirage, exclusArr, nbParties) {
   const dict = {}
   if (!Array.isArray(fullTirage)) return dict
   // Copie mutable de fullTirage qui subira les swaps successifs
-  const base = fullTirage.map((p) => ({ ...p }))
+  // Normaliser : accepter soit des strings (noms) soit des objets {nom, numero}
+  const base = (fullTirage || []).map((p, idx) => {
+    if (!p) return { nom: null, numero: idx + 1 }
+    if (typeof p === 'string') return { nom: p, numero: idx + 1 }
+    // clone object
+    return { nom: p.nom || null, numero: (typeof p.numero === 'number') ? p.numero : idx + 1 }
+  })
+
+  // Ensure excluded players are present in base (some callers may pass active tirage)
+  try {
+    if (Array.isArray(exclusArr) && exclusArr.length) {
+      const baseNames = base.map(b => (b && b.nom) ? String(b.nom).trim().toLowerCase() : null).filter(Boolean)
+      exclusArr.forEach((ex) => {
+        if (!ex) return
+        const exn = String(ex).trim()
+        if (!exn) return
+        if (!baseNames.includes(exn.toLowerCase())) {
+          base.push({ nom: exn, numero: base.length + 1 })
+          baseNames.push(exn.toLowerCase())
+          console.debug('buildDictRotationsWithExclus: appended missing exclu to base', exn)
+        }
+      })
+    }
+  } catch (_e) {}
   const seatIndex = getExcluSeatIndex()
 
   // Si le seatIndex n'est pas défini, on calcule une seule fois TOUS les mouvements
@@ -2216,6 +2292,7 @@ function buildDictRotationsWithExclus (fullTirage, exclusArr, nbParties) {
     try {
       // If no seatIndex is configured, decide whether to use exclu mode based on persisted exclus array
       const modeExcluAuto = (Array.isArray(exclusArr) && exclusArr.length > 0 && exclusArr[0]) && getMode() !== 'tables56'
+      console.debug('buildDictRotationsWithExclus: seatIndex null', { baseLen: base.length, modeExcluAuto, exclusArr })
       const all = calculRotationsRainbow(base, nbParties, modeExcluAuto)
       for (let r = 0; r < nbParties; r++) {
         dict[`Manche ${r + 1}`] = all[`Manche ${r + 1}`] || []
@@ -2238,6 +2315,7 @@ function buildDictRotationsWithExclus (fullTirage, exclusArr, nbParties) {
     const exclu = exclusArr && exclusArr[r] ? exclusArr[r] : null
     // compute active array for this manche (may swap the excluded player to seatIndex if needed)
     const active = computeActiveFromBase(base, seatIndex, exclu)
+    console.debug('buildDictRotationsWithExclus: manche active', { manche: r + 1, exclu, activeLen: Array.isArray(active) ? active.length : null, baseLen: base.length, seatIndex })
 
     // calculer une rotation d'une seule manche pour cet ensemble
     try {
@@ -2318,6 +2396,10 @@ const { openCompositionModal: _openCompositionModal, closeCompositionModal: _clo
   showToast,
   getScoresTournoi,
   setScoresTournoi,
+  setScoresParTable,
+  clearAllValidatedMancheSnapshots,
+  setExcluSeatIndex,
+  clearExcluSeatIndex,
   saveTirage,
   clearAllLucky,
   renderFeuilleSoiree,
@@ -2337,6 +2419,18 @@ if (btnManualCompositionJoueurs) btnManualCompositionJoueurs.addEventListener('c
   // - prompt user to add "Mort(s)" / use tables 5/6 / mode exclu / cancel
   // - apply the chosen mode before computing the composition preview
   try {
+    // Remove any existing 'Mort' entries so composition starts from active players
+    try {
+      if (Array.isArray(listeTournoi)) {
+        const hadMort = listeTournoi.some(n => n && String(n).toUpperCase().includes('MORT'))
+        if (hadMort) {
+          listeTournoi = listeTournoi.filter(n => !(n && String(n).toUpperCase().includes('MORT')))
+          try { renderListeTournoi() } catch (_e) {}
+          try { await renderListeGenerale() } catch (_e) {}
+          try { scheduleSaveListeTournoi() } catch (_e) {}
+        }
+      }
+    } catch (_e) {}
     const reste = (Array.isArray(listeTournoi) ? listeTournoi.length : 0) % 4
     if (reste !== 0 && Array.isArray(listeTournoi) && listeTournoi.length >= 5) {
       let aAjouter = 4 - reste
@@ -2810,23 +2904,23 @@ async function validateAndPersistTable (tData, tblEl, mancheIndex = -1) {
     for (let r = 0; r < partiesEls.length; r++) {
       const rowEl = partiesEls[r]
       const inputs = Array.from(rowEl.querySelectorAll('input'))
-      const filled = inputs.filter(i => i.value !== '')
+      // Exclude disabled inputs (dealer cell in 5-player tables always contains '0')
+      // so they are never mistaken for an attacker value on an otherwise empty row.
+      const filled = inputs.filter(i => i.value !== '' && !i.disabled)
 
       if (mancheIndex === r) {
         // diagnostics
         try { if (typeof process !== 'undefined' && process.stdout && process.stdout.write) process.stdout.write(`[validateTable] mancheIndex=${mancheIndex} row=${r} inputVals=${inputs.map(i=>i.value).join('|')}\n`) } catch(_e){}
-        // check that every player in this manche has a non-empty entry
-        mancheAllFilled = inputs.every(i => i.value !== '')
+        // check that every player in this manche has a non-empty entry (exclude disabled dealer)
+        mancheAllFilled = inputs.filter(i => !i.disabled).every(i => i.value !== '')
         try { if (typeof process !== 'undefined' && process.stdout && process.stdout.write) process.stdout.write(`[validateTable] mancheAllFilled=${mancheAllFilled}\n`) } catch(_e){}
       }
 
-      let rowScores = new Array(tableSize).fill(0)
+      let rowScores = new Array(tableSize).fill(null)
       if (filled.length === 0) {
-        // Preserve previous behavior for 5-player tables (pre-filled zeros).
-        // For other table sizes, keep values as `null` so inputs stay empty
-        // instead of showing spurious "0" entries when nothing was entered.
-        if (tableSize === 5) rowScores = new Array(tableSize).fill(0)
-        else rowScores = new Array(tableSize).fill(null)
+        // No inputs filled: keep all scores as null so inputs remain blank.
+        // Mort positions are zeroed out later by the dedicated block below.
+        rowScores = new Array(tableSize).fill(null)
       } else if (filled.length === 1) {
         const attackerInput = filled[0]
         const attackerVal = Number(attackerInput.value)
@@ -3159,8 +3253,10 @@ async function renderSaisieParTable () {
   // Prevent concurrent renders which caused duplicate UI
   if (typeof _renderingSaisieLock === 'undefined') _renderingSaisieLock = false
   if (_renderingSaisieLock) {
-    console.warn('renderSaisieParTable: detected rendering lock — clearing stale lock and continuing')
-    _renderingSaisieLock = false
+    // Un render est déjà en cours — on mémorise la demande pour la rejouer après,
+    // au lieu de casser le verrou (ce qui provoquait deux renders simultanés et l'UI dupliquée).
+    _pendingRenderSaisie = true
+    return
   }
   _renderingSaisieLock = true
   try {
@@ -3226,11 +3322,24 @@ async function renderSaisieParTable () {
     // Check if this rotation has a validated snapshot (past manche review)
     const validatedSnapshot = loadValidatedMancheSnapshot(nomRot)
     const isValidatedManche = !!validatedSnapshot
-    // If a validated snapshot exists, use it as the display base. When
-    // `validatedEditMode` is false the view will be read-only; when true the
-    // same snapshot is used but inputs are editable so users can adjust values.
+    // If a validated snapshot exists, use it as the display base. However,
+    // ensure the snapshot's `players` lists follow the CURRENT rotation
+    // specification so placeholders like 'MORT' are preserved in the Saisie.
     if (isValidatedManche) {
       try { normalizedTables = JSON.parse(JSON.stringify(validatedSnapshot)) } catch (_e) { normalizedTables = validatedSnapshot }
+      try {
+        // Build a map tableId -> players names from current rotation `tables`
+        const rotMap = new Map((tables || []).map(t => [Number(t.table), (t.joueurs || []).map(j => (j && j.nom) || '')]))
+        normalizedTables = (normalizedTables || []).map((nt) => {
+          const tableId = Number(nt.table)
+          const rotPlayers = rotMap.get(tableId) || []
+          // Only replace players if lengths match to avoid corrupting snapshots
+          if (Array.isArray(rotPlayers) && Array.isArray(nt.players) && rotPlayers.length === nt.players.length) {
+            nt.players = rotPlayers.slice()
+          }
+          return nt
+        })
+      } catch (_e) { /* non-blocking */ }
     }
     const isValidatedMancheView = isValidatedManche && !validatedEditMode
 
@@ -3363,7 +3472,14 @@ async function renderSaisieParTable () {
 
     // (validated snapshot is used as base; editing is allowed directly)
 
+    // selected manche index for header labelling (used to mark excluded seat)
+    const selIdxTop = (selectRotation && typeof selectRotation.selectedIndex === 'number') ? selectRotation.selectedIndex : 0
+    const excluForSelectedManche = (exclusArr && exclusArr[selIdxTop]) ? String(exclusArr[selIdxTop]).trim() : null
+
     normalizedTables.forEach((tData) => {
+      // Timer de debounce partagé pour toutes les cellules de cette table
+      let _saveTimer = null
+
       const divTable = document.createElement('div')
       divTable.className = 'fast-table-card saisie-card'
     // Ensure card carries the table id so performGlobalValidateManche can read it
@@ -3418,13 +3534,24 @@ async function renderSaisieParTable () {
         const th = document.createElement('th')
         // Highlight 'Mort' placeholders in the header for clarity
         try {
-          if (pn && String(pn).toUpperCase().startsWith('MORT')) {
+          const pname = pn || ''
+          const isMortHeader = String(pname).toUpperCase().startsWith('MORT')
+          const isExcluHeader = excluForSelectedManche && String(excluForSelectedManche) === String(pname)
+          if (isMortHeader) {
             const span = document.createElement('span')
             span.className = 'label-mort'
-            span.textContent = pn
+            span.textContent = pname
             th.appendChild(span)
           } else {
-            th.textContent = pn || '-'
+            // default: player name, with inline exclu label when applicable
+            th.textContent = pname || '-'
+            if (isExcluHeader) {
+              const s = document.createElement('span')
+              s.className = 'exclu-inline'
+              s.style.marginLeft = '6px'
+              s.textContent = '(exclu)'
+              th.appendChild(s)
+            }
           }
         } catch (_e) {
           th.textContent = pn || '-'
@@ -3502,10 +3629,11 @@ async function renderSaisieParTable () {
           const validationArg = (Array.isArray(tData.players) && tData.players.some(p => String(p || '').toUpperCase().startsWith('MORT'))) ? tData.players : tableSize
           const mortDiv = (getMode && getMode() === 'morts') ? getMortsDivisor() : null
           if (!validateAttackerDivisibility(attackerVal, validationArg, mortDiv)) {
-            // invalid divisibility — show bubble and do not compute defenders
+            // invalid divisibility — show bubble and restore focus via setTimeout
+            // to avoid a focus loop when called from onfocus handlers.
             const div = (mortDiv && (mortDiv === 2 || mortDiv === 3)) ? mortDiv : getRequiredDivisor(validationArg)
             try { showValidationBubble(attackerInput, `Valeur invalide — multiple de ${div} requis`) } catch (_e) {}
-            try { attackerInput.focus(); attackerInput.select() } catch (_e) {}
+            setTimeout(() => { try { attackerInput.focus(); attackerInput.select() } catch (_e) {} }, 0)
             return
           }
 
@@ -3581,8 +3709,11 @@ async function renderSaisieParTable () {
           td.classList.add('input-cell')
 
           const inp = document.createElement('input')
-          inp.type = 'number'
+          inp.type = 'text'
+          inp.inputMode = 'decimal'
           inp.autocomplete = 'off'
+          inp.setAttribute('spellcheck', 'false')
+          inp.setAttribute('autocorrect', 'off')
           inp.name = `tbl-${tData.table}-p${partIdx}-c${colIdx}-${Date.now()}-${Math.random().toString(36).substr(2,5)}`
           if ((typeof global !== 'undefined' ? global : window).__debugDumpTables) {
             try { process.stdout.write(`CELL debug: partIdx=${partIdx} colIdx=${colIdx} cellVal=${cellVal}\n`) } catch (_e) {}
@@ -3591,6 +3722,14 @@ async function renderSaisieParTable () {
           inp.classList.add('saisie-input')
           inp.dataset.colIdx = String(colIdx)
           inp.dataset.partIdx = String(partIdx)
+
+          // Restrict input to digits and leading minus sign only (avoids native macOS number handling)
+          inp.addEventListener('input', () => {
+            const raw = inp.value
+            const match = raw.match(/^-?[0-9]*/)
+            const clean = match ? match[0] : ''
+            if (raw !== clean) inp.value = clean
+          })
 
           // dealer handling for 5-player tables
           if (isFive && colIdx === dealerIdx) {
@@ -3655,7 +3794,7 @@ async function renderSaisieParTable () {
           // allow changes when NOT in validated read-only view (i.e. either
           // normal mode or validatedEditMode === true)
           if (!(isValidatedManche && !validatedEditMode) && !(inExcluMode && partIsValidated)) {
-          inp.onchange = async (ev) => {
+          inp.onchange = (ev) => {
             const rowInputs = Array.from(tr.querySelectorAll('input'))
             rowInputs.forEach((ri) => {
               if (ri === ev.target) return
@@ -3663,16 +3802,24 @@ async function renderSaisieParTable () {
               ri.value = ''
             })
             computeRowAndFill(tr)
-            // autosave the current table state so it survives re-renders/navigation
-            try {
-              let tablesData = await getScoresParTable() || []
-              const idx = tablesData.findIndex(x => Number(x.table) === Number(tData.table))
-              if (idx >= 0) tablesData[idx] = tData
-              else tablesData.push(tData)
-              await setScoresParTable(tablesData)
-            } catch (_e) {
-              console.warn('autosave table failed', _e)
-            }
+            // autosave avec debounce : évite de saturer le canal IPC à chaque frappe.
+            // Lecture depuis le cache localStorage (synchrone) pour supprimer l'aller-retour IPC en lecture.
+            clearTimeout(_saveTimer)
+            _saveTimer = setTimeout(async () => {
+              try {
+                let tablesData
+                try {
+                  const cached = localStorage.getItem('scores_par_table')
+                  tablesData = cached ? JSON.parse(cached) : []
+                } catch (_e) { tablesData = [] }
+                const idx = tablesData.findIndex(x => Number(x.table) === Number(tData.table))
+                if (idx >= 0) tablesData[idx] = tData
+                else tablesData.push(tData)
+                await setScoresParTable(tablesData)
+              } catch (_e) {
+                console.warn('autosave table failed', _e)
+              }
+            }, 250)
           }
 
           // When focusing a cell, compute for the previously focused row (if any)
@@ -3728,10 +3875,39 @@ async function renderSaisieParTable () {
       containerSaisie.appendChild(divTable)
     })
 
-    const firstInp = containerSaisie.querySelector('input[type=number]')
+    const firstInp = containerSaisie.querySelector('input.saisie-input')
     if (firstInp) setTimeout(() => firstInp.focus(), 50)
+    // Post-render: ensure excluded player header labels are visible
+    try {
+      const selIdxTop = (selectRotation && typeof selectRotation.selectedIndex === 'number') ? selectRotation.selectedIndex : 0
+      const exclusArrLocal = (await getExclusTournoi().catch(() => [])) || []
+      const exclNom = exclusArrLocal[selIdxTop] || null
+      if (exclNom) {
+        // find th elements in containerSaisie matching the excluded name and append marker
+        const ths = Array.from(containerSaisie.querySelectorAll('th'))
+        ths.forEach(th => {
+          try {
+            // if th already contains excl marker, skip
+            if (th.querySelector && th.querySelector('.exclu-inline')) return
+            const txt = (th.textContent || '').trim()
+            if (txt === exclNom) {
+              const s = document.createElement('span')
+              s.className = 'exclu-inline'
+              s.style.marginLeft = '6px'
+              s.textContent = '(exclu)'
+              th.appendChild(s)
+            }
+          } catch (_e) {}
+        })
+      }
+    } catch (_e) { /* ignore decoration errors */ }
   } finally {
     _renderingSaisieLock = false
+    // Si un render a été demandé pendant l'exécution, on le lance maintenant
+    if (_pendingRenderSaisie) {
+      _pendingRenderSaisie = false
+      setTimeout(() => { try { renderSaisieParTable() } catch (_e) {} }, 0)
+    }
   }
 }
 
@@ -4795,7 +4971,7 @@ async function renderFeuilleSoiree () {
       const mancheInputs = Array.from({ length: nbParties }, (_, idxM) => {
         const raw = r.manches[idxM]
         const val = (typeof raw === 'number' && raw !== 0) ? raw : ''
-        return `<td><input type="number" class="manual-manche-input" data-nom="${encodeURIComponent(r.nom)}" data-manche="${idxM}" value="${val}" /></td>`
+        return `<td><input type="text" inputmode="decimal" spellcheck="false" autocorrect="off" class="manual-manche-input" data-nom="${encodeURIComponent(r.nom)}" data-manche="${idxM}" value="${val}" /></td>`
       }).join('')
 
       const totalDisplay = (r.hasAny && r.totalSaved !== null) ? r.totalSaved : ''
@@ -4870,6 +5046,14 @@ async function renderFeuilleSoiree () {
 
     // Attach listeners to inputs
     tbodySoiree.querySelectorAll('.manual-manche-input').forEach((input) => {
+      // Restrict to digits and leading minus (avoids native macOS number input behavior)
+      input.addEventListener('input', () => {
+        const raw = input.value
+        const match = raw.match(/^-?[0-9]*/)
+        const clean = match ? match[0] : ''
+        if (raw !== clean) input.value = clean
+      })
+
       input.addEventListener('input', async (e) => {
         const el = e.target
         const nom = decodeURIComponent(el.dataset.nom)
@@ -6821,16 +7005,48 @@ btnFinTournoi.addEventListener('click', async () => {
       return
     }
     // Inclure les redistributions appliquées pour cette date afin de les retrouver dans le recap
-    // Also persist any in-memory 'lucky' or 'rewarded' entries for this date (trace only in recap)
+    // Also persist any in-memory / displayed 'lucky' or 'rewarded' entries for this date (trace only in recap)
     const newEntry = { date, scores: scoresSoiree }
-    const rewardsSet = new Set()
-    const luckyName = luckyWinnerByDate[date]
-    if (luckyName) rewardsSet.add(luckyName)
-    const rewardedSet = rewardedPlayersByDate[date]
-    if (rewardedSet && rewardedSet.size) rewardedSet.forEach(n => rewardsSet.add(n))
 
-    if (rewardsSet.size) {
-      newEntry.rewards = Array.from(rewardsSet).map(n => ({ name: n, type: 'lucky', amount: 2.5 }))
+    // Build a map nameNormalized -> totalAmount (sum if multiple sources)
+    const rewardsMap = new Map()
+
+    const addReward = (name, amount = 2.5) => {
+      try {
+        if (!name) return
+        const key = normalizeNom(name)
+        const cur = rewardsMap.get(key) || { name, amount: 0 }
+        cur.amount = Number(cur.amount || 0) + Number(amount || 0)
+        rewardsMap.set(key, cur)
+      } catch (e) { /* ignore */ }
+    }
+
+    try {
+      // 1) from in-memory lucky/rewarded structures
+      const luckyName = luckyWinnerByDate[date]
+      if (luckyName) addReward(luckyName, 2.5)
+      const rewardedSet = rewardedPlayersByDate[date]
+      if (rewardedSet && rewardedSet.size) Array.from(rewardedSet).forEach(n => addReward(n, 2.5))
+
+      // 2) also scan the current Feuille DOM for any displayed lucky markers
+      try {
+        const tbody = document.getElementById('tbody-soiree') || tbodySoiree
+        if (tbody && tbody.querySelectorAll) {
+          Array.from(tbody.querySelectorAll('.col-gain .gain-lucky')).forEach(el => {
+            try {
+              const tr = el.closest('tr')
+              const name = tr && tr.querySelector && tr.querySelector('.col-joueur') ? (tr.querySelector('.col-joueur').textContent || '').trim() : null
+              if (name) addReward(name, 2.5)
+            } catch (_e) {}
+          })
+        }
+      } catch (_e) {}
+    } catch (e) {
+      console.warn('collect rewards for recap failed', e)
+    }
+
+    if (rewardsMap.size) {
+      newEntry.rewards = Array.from(rewardsMap.values()).map(v => ({ name: v.name, type: 'lucky', amount: v.amount }))
     }
 
     // Keep history: do not remove previous 'lucky' rewards — append newEntry to recap
