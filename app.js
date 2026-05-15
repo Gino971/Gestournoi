@@ -7180,10 +7180,26 @@ btnFinTournoi.addEventListener('click', async () => {
           // in the Saisie on app restart. calculRotationsRainbow (used above) has no
           // knowledge of excluded players, so we must replace its result here.
           if (dernierFullTirage && dernierFullTirage.length > 0) {
-            try {
-              dernierDictRotations = buildDictRotationsWithExclus(dernierFullTirage, exclusArr, nbPartiesToPlan)
-            } catch (_eR) {
-              console.warn('init: buildDictRotationsWithExclus failed, keeping calculRotationsRainbow result', _eR)
+            // Restore seatIndex if not persisted (e.g. first launch after setting exclus).
+            // seatIndex = position of the first exclu player in dernierFullTirage.
+            if (getExcluSeatIndex() === null) {
+              const firstExclu = exclusArr.find(Boolean)
+              if (firstExclu) {
+                const idx = dernierFullTirage.findIndex(
+                  p => p && String(p.nom || '').trim().toLowerCase() === String(firstExclu).trim().toLowerCase()
+                )
+                if (idx >= 0) setExcluSeatIndex(idx)
+              }
+            }
+            // Only rebuild when seatIndex is known; otherwise buildDictRotationsWithExclus
+            // falls back to an unconstrained calculRotationsRainbow that may produce
+            // tables of wrong sizes (e.g. tables of 5 when exclu mode expects 4).
+            if (getExcluSeatIndex() !== null) {
+              try {
+                dernierDictRotations = buildDictRotationsWithExclus(dernierFullTirage, exclusArr, nbPartiesToPlan)
+              } catch (_eR) {
+                console.warn('init: buildDictRotationsWithExclus failed, keeping calculRotationsRainbow result', _eR)
+              }
             }
           }
           // Mettre à jour affichage pour montrer qui est exclu par manche
@@ -7200,7 +7216,7 @@ btnFinTournoi.addEventListener('click', async () => {
           'Plan de table : ' + getTypeMouvementLabelFromTirage(tirageExistant)
       }
 
-      rotationsResultDiv.innerHTML = Object.entries(dict)
+      rotationsResultDiv.innerHTML = Object.entries(dernierDictRotations)
         .map(([nomRot, tables], mancheIndex) => {
           const blocTables = tables
             .map((t) => {
