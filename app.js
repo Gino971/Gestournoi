@@ -7179,6 +7179,23 @@ btnFinTournoi.addEventListener('click', async () => {
           // FIX: rebuild rotations with exclu logic so the excluded player does not appear
           // in the Saisie on app restart. calculRotationsRainbow (used above) has no
           // knowledge of excluded players, so we must replace its result here.
+
+          // On GitHub Pages (browser), tarot_full_tirage may be absent from localStorage
+          // (first visit, or no composition done in browser yet). In that case tirageExistant
+          // already contains the exclu player → reconstruct a temporary dernierFullTirage so
+          // that the seatIndex restoration below can work.
+          if ((!dernierFullTirage || dernierFullTirage.length === 0) && tirageExistant && tirageExistant.length > 0) {
+            const reconstructed = tirageExistant.map(p => ({ ...p }))
+            exclusArr.filter(Boolean).forEach(nm => {
+              const nmLow = String(nm).trim().toLowerCase()
+              if (!reconstructed.some(p => String(p && p.nom || '').trim().toLowerCase() === nmLow)) {
+                reconstructed.push({ nom: nm, numero: reconstructed.length + 1 })
+              }
+            })
+            dernierFullTirage = reconstructed
+            try { localStorage.setItem('tarot_full_tirage', JSON.stringify(dernierFullTirage)) } catch (_e) {}
+          }
+
           if (dernierFullTirage && dernierFullTirage.length > 0) {
             // Restore seatIndex if not persisted (e.g. first launch after setting exclus).
             // seatIndex = position of the first exclu player in dernierFullTirage.
