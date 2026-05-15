@@ -3321,18 +3321,6 @@ async function renderSaisieParTable () {
       try { if (typeof process !== 'undefined' && process.stdout && process.stdout.write) process.stdout.write(msg) } catch (_e) { }
     }
 
-    // Diagnostic: expose raw rotation + stored data so bugs can be pinpointed from DevTools
-    try {
-      window.__debugSaisie = {
-        nomRot,
-        seatIndex: getExcluSeatIndex(),
-        rotationTables: (tables || []).map(t => ({ table: t.table, joueurs: (t.joueurs || []).map(j => j && j.nom) })),
-        storedTablesData: (tablesData || []).map(t => ({ table: t.table, players: (t.players || []).slice() })),
-        dictKeys: Object.keys(dernierDictRotations || {}),
-        ts: Date.now()
-      }
-    } catch (_e) {}
-
     // NOTE: per-table validation implementation moved to module-level `validateAndPersistTable`
     // to make the global validation accessible from header buttons and other UI paths.
 
@@ -3943,14 +3931,6 @@ async function renderSaisie () {
     window.__renderSaisieDiagnostics.selectRotationOptions = (selectRotation && selectRotation.options && selectRotation.options.length) ? selectRotation.options.length : 0
     window.__renderSaisieDiagnostics.dernierDictRotationsKeys = (dernierDictRotations && Object.keys(dernierDictRotations).length) || 0
     window.__renderSaisieDiagnostics._renderingSaisieLock = !!_renderingSaisieLock
-    window.__renderSaisieDiagnostics.seatIndex = getExcluSeatIndex()
-    // Capture player lists for manche 1 at render time
-    try {
-      const nomR = (selectRotation && selectRotation.value) || (dernierDictRotations ? Object.keys(dernierDictRotations)[0] : null)
-      window.__renderSaisieDiagnostics.rotationManche1 = (dernierDictRotations && dernierDictRotations['Manche 1'])
-        ? (dernierDictRotations['Manche 1'] || []).map(t => ({ table: t.table, joueurs: (t.joueurs || []).map(j => j && j.nom) }))
-        : null
-    } catch (_e) {}
   } catch (_e) {}
 
   if (!containerSaisie) return
@@ -7195,6 +7175,16 @@ btnFinTournoi.addEventListener('click', async () => {
           if (exclusArr.length < nbParties) {
             for (let i = exclusArr.length; i < nbParties; i++) exclusArr[i] = null
             await setExclusTournoi(exclusArr)
+          }
+          // FIX: rebuild rotations with exclu logic so the excluded player does not appear
+          // in the Saisie on app restart. calculRotationsRainbow (used above) has no
+          // knowledge of excluded players, so we must replace its result here.
+          if (dernierFullTirage && dernierFullTirage.length > 0) {
+            try {
+              dernierDictRotations = buildDictRotationsWithExclus(dernierFullTirage, exclusArr, nbPartiesToPlan)
+            } catch (_eR) {
+              console.warn('init: buildDictRotationsWithExclus failed, keeping calculRotationsRainbow result', _eR)
+            }
           }
           // Mettre à jour affichage pour montrer qui est exclu par manche
           await updateRotationsDisplay()
