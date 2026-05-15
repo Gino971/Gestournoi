@@ -39,10 +39,10 @@ import {
   setRecap,
   getExclusTournoi,
   setExclusTournoi
-} from './api.js?v=17'
+} from './api.js?v=19'
 
-import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=17'
-import { computeEligible } from './lucky-utils.js?v=17'
+import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=19'
+import { computeEligible } from './lucky-utils.js?v=19'
 import {
   tirageAuSort,
   transfertTotauxTable,
@@ -51,13 +51,13 @@ import {
   distributeAttackerScore,
   validateAttackerDivisibility,
   placeAttackerAtIndex
-} from './coreTournoi.js?v=17'
-import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=17'
-import { generateSerpentinTables } from './serpentin.js?v=17'
-import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=17'
-import { buildClassementFromRecap } from './lib/classement-utils.js?v=17'
-import { askConfirm, _showCustomDialog } from './lib/dialogs.js?v=17'
-import { initComposition } from './lib/composition.js?v=17'
+} from './coreTournoi.js?v=19'
+import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=19'
+import { generateSerpentinTables } from './serpentin.js?v=19'
+import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=19'
+import { buildClassementFromRecap } from './lib/classement-utils.js?v=19'
+import { askConfirm, _showCustomDialog } from './lib/dialogs.js?v=19'
+import { initComposition } from './lib/composition.js?v=19'
 // Temporary build identifier for manual served-file verification (do not commit)
 const FRONTEND_BUILD_ID = 'frontend-build-2026-04-17T23:30:00Z'
 
@@ -1132,7 +1132,7 @@ if (btnRestaurationNav) {
 const planHeadingEl = document.getElementById('plan-heading')
 
 // Minuteur
-import initTimer from './timer.js?v=17'
+import initTimer from './timer.js?v=19'
 try { initTimer() } catch (_e) { /* ignore if timer DOM not ready */ }
 
 
@@ -2319,8 +2319,12 @@ function buildDictRotationsWithExclus (fullTirage, exclusArr, nbParties) {
 
   for (let r = 0; r < nbParties; r++) {
     const exclu = exclusArr && exclusArr[r] ? exclusArr[r] : null
-    // compute active array for this manche (may swap the excluded player to seatIndex if needed)
-    const active = computeActiveFromBase(base, seatIndex, exclu)
+    // compute active array for this manche (may swap the excluded player to seatIndex if needed).
+    // When exclu is null but seatIndex is set, remove the player at seatIndex directly (default exclu)
+    // rather than returning the full base which would place the exclu at a table with wrong player count.
+    const active = exclu
+      ? computeActiveFromBase(base, seatIndex, exclu)
+      : base.filter((_, i) => i !== seatIndex)
     console.debug('buildDictRotationsWithExclus: manche active', { manche: r + 1, exclu, activeLen: Array.isArray(active) ? active.length : null, baseLen: base.length, seatIndex })
 
     // calculer une rotation d'une seule manche pour cet ensemble
@@ -3317,6 +3321,18 @@ async function renderSaisieParTable () {
       try { if (typeof process !== 'undefined' && process.stdout && process.stdout.write) process.stdout.write(msg) } catch (_e) { }
     }
 
+    // Diagnostic: expose raw rotation + stored data so bugs can be pinpointed from DevTools
+    try {
+      window.__debugSaisie = {
+        nomRot,
+        seatIndex: getExcluSeatIndex(),
+        rotationTables: (tables || []).map(t => ({ table: t.table, joueurs: (t.joueurs || []).map(j => j && j.nom) })),
+        storedTablesData: (tablesData || []).map(t => ({ table: t.table, players: (t.players || []).slice() })),
+        dictKeys: Object.keys(dernierDictRotations || {}),
+        ts: Date.now()
+      }
+    } catch (_e) {}
+
     // NOTE: per-table validation implementation moved to module-level `validateAndPersistTable`
     // to make the global validation accessible from header buttons and other UI paths.
 
@@ -3927,6 +3943,14 @@ async function renderSaisie () {
     window.__renderSaisieDiagnostics.selectRotationOptions = (selectRotation && selectRotation.options && selectRotation.options.length) ? selectRotation.options.length : 0
     window.__renderSaisieDiagnostics.dernierDictRotationsKeys = (dernierDictRotations && Object.keys(dernierDictRotations).length) || 0
     window.__renderSaisieDiagnostics._renderingSaisieLock = !!_renderingSaisieLock
+    window.__renderSaisieDiagnostics.seatIndex = getExcluSeatIndex()
+    // Capture player lists for manche 1 at render time
+    try {
+      const nomR = (selectRotation && selectRotation.value) || (dernierDictRotations ? Object.keys(dernierDictRotations)[0] : null)
+      window.__renderSaisieDiagnostics.rotationManche1 = (dernierDictRotations && dernierDictRotations['Manche 1'])
+        ? (dernierDictRotations['Manche 1'] || []).map(t => ({ table: t.table, joueurs: (t.joueurs || []).map(j => j && j.nom) }))
+        : null
+    } catch (_e) {}
   } catch (_e) {}
 
   if (!containerSaisie) return
