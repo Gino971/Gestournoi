@@ -7229,7 +7229,7 @@ btnFinTournoi.addEventListener('click', async () => {
               if (idx >= 0) setExcluSeatIndex(idx)
             }
             const si = getExcluSeatIndex()
-            console.log('[init exclu] seatIndex:', si, 'firstExclu:', firstExclu, 'dernierFullTirage.length:', dernierFullTirage.length, 'exclusArr:', exclusArr)
+            console.warn('[init exclu] seatIndex:', si, '| firstExclu:', firstExclu, '| fullTirage.length:', dernierFullTirage.length, '| tirageExistant.length:', tirageExistant.length, '| exclusArr:', JSON.stringify(exclusArr))
             if (si !== null && si >= 0 && si < dernierFullTirage.length) {
               try {
                 dernierDictRotations = buildDictRotationsWithExclus(dernierFullTirage, exclusArr, nbPartiesToPlan)
@@ -7240,6 +7240,44 @@ btnFinTournoi.addEventListener('click', async () => {
               console.warn('[init exclu] seatIndex invalide ou hors limites, rotations non reconstruites', { si, len: dernierFullTirage.length })
             }
           }
+
+          // Safety net: if the exclu player is still present in Manche 1 rotation after the
+          // fix above (e.g. seatIndex was wrong or buildDictRotationsWithExclus silently failed),
+          // fall back to a per-manche calculation by filtering directly from tirageExistant.
+          // This guarantees the exclu never appears in the Saisie regardless of session state.
+          try {
+            const firstExcluCheck = exclusArr.find(Boolean)
+            if (firstExcluCheck) {
+              const exLowCheck = String(firstExcluCheck).trim().toLowerCase()
+              const manche1 = dernierDictRotations['Manche 1'] || []
+              const excluStillPresent = manche1.some(t =>
+                Array.isArray(t && t.joueurs) && t.joueurs.some(p => p && String(p.nom || '').trim().toLowerCase() === exLowCheck)
+              )
+              if (excluStillPresent) {
+                console.warn('[init exclu] FALLBACK: exclu encore dans Manche 1, recalcul par filtre direct')
+                const fbDict = {}
+                let fbOk = true
+                for (let r = 0; r < nbPartiesToPlan; r++) {
+                  const exNom = exclusArr[r] || null
+                  const exLow = exNom ? String(exNom).trim().toLowerCase() : null
+                  const active = exLow
+                    ? tirageExistant.filter(p => String(p && p.nom || '').trim().toLowerCase() !== exLow)
+                    : tirageExistant
+                  if (!active.length) { fbOk = false; break }
+                  const sub = calculRotationsRainbow(active, 1)
+                  if (!sub || !sub['Manche 1']) { fbOk = false; break }
+                  fbDict[`Manche ${r + 1}`] = sub['Manche 1']
+                }
+                if (fbOk && Object.keys(fbDict).length === nbPartiesToPlan) {
+                  dernierDictRotations = fbDict
+                  console.warn('[init exclu] FALLBACK appliqué, exclu retiré par filtre direct')
+                }
+              }
+            }
+          } catch (_eFb) {
+            console.warn('[init exclu] erreur vérification fallback:', _eFb)
+          }
+
           // Mettre à jour affichage pour montrer qui est exclu par manche
           await updateRotationsDisplay()
         }
