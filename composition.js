@@ -12,27 +12,22 @@ export function initComposition (api) {
   async function openCompositionModal () {
     if (!compOverlay) return
     let avail = (api.getListeTournoi() || []).filter(n => n && String(n).trim() !== '')
+    // Toujours charger les exclus et réinitialiser les scores au lancement
+    // de la composition, quel que soit le mode.
+    let exclSet = new Set()
     try {
-      if (typeof api.getMode === 'function' && api.getMode() === 'exclu') {
-        // In composition mode we must keep the excluded player in the full
-        // list (like the tirage flow). Do NOT remove the exclu from the
-        // available pool here; buildDictRotationsWithExclus will handle per-
-        // manche removal. Instead, compute the set so we can visually mark it.
-        const exclusArr = (await api.getExclusTournoi()) || []
-        var exclSet = new Set((exclusArr || []).filter(Boolean))
-        // In 'exclu' mode we want to ensure scores are reset to a clean
-        // initial state so the Saisie/Feuille UI reflects zeroed values.
-        try {
-          const initScores = (api.getListeTournoi() || []).map(n => [n, 0])
-          await api.setScoresTournoi(initScores)
-          try { if (typeof api.renderFeuilleSoiree === 'function') await api.renderFeuilleSoiree() } catch (_e) {}
-          try { if (typeof api.updateRotationsDisplay === 'function') await api.updateRotationsDisplay() } catch (_e) {}
-        } catch (_e) {
-          // Do not block composition if score reset fails; log silently.
-          console.warn('composition: failed to reset scores on open (exclu)', _e)
-        }
-      }
-    } catch (_e) {}
+      const exclusArr = (await api.getExclusTournoi()) || []
+      exclSet = new Set((exclusArr || []).filter(Boolean))
+      const initScores = (api.getListeTournoi() || []).map(n => [n, 0])
+      await api.setScoresTournoi(initScores)
+      try { await api.setScoresParTable([]) } catch (_e2) {}
+      try { api.clearAllValidatedMancheSnapshots() } catch (_e2) {}
+      try { localStorage.removeItem('scores_par_table') } catch (_e2) {}
+      try { if (typeof api.renderFeuilleSoiree === 'function') await api.renderFeuilleSoiree() } catch (_e) {}
+      try { if (typeof api.updateRotationsDisplay === 'function') await api.updateRotationsDisplay() } catch (_e) {}
+    } catch (_e) {
+      console.warn('composition: failed to reset on open', _e)
+    }
     if (compAvailableList) {
       const availForPlacement = avail.filter(n => {
         if (!n) return false
@@ -277,7 +272,29 @@ export function initComposition (api) {
       try {
         const exclus = await api.getExclusTournoi()
         const nbPartiesToPlan = (document.getElementById('cb-serpentin') && document.getElementById('cb-serpentin').checked && Number(document.getElementById('nb-parties').value || 1) > 1) ? Number(document.getElementById('nb-parties').value || 1) - 1 : Number(document.getElementById('nb-parties').value || 1)
-        const dict = api.buildDictRotationsWithExclus(previewFullTirage, exclus, nbPartiesToPlan)
+        // Filtre direct par manche : on retire l'exclu de previewFullTirage sans dépendre du seatIndex.
+        const getNom = p => String((p && typeof p === 'object' ? (p.nom || '') : (p || ''))).trim().toLowerCase()
+        let dict
+        if (exclSet && exclSet.size > 0 && typeof api.calculRotationsRainbow === 'function') {
+          const fbDict = {}
+          let fbOk = true
+          for (let r = 0; r < nbPartiesToPlan; r++) {
+            const exNom = (exclus || [])[r] || null
+            const exLow = exNom ? String(exNom).trim().toLowerCase() : null
+            const active = exLow
+              ? previewFullTirage.filter(p => getNom(p) !== exLow)
+              : previewFullTirage
+            if (!active.length) { fbOk = false; break }
+            const sub = api.calculRotationsRainbow(active, 1)
+            if (!sub || !sub['Manche 1']) { fbOk = false; break }
+            fbDict[`Manche ${r + 1}`] = sub['Manche 1']
+          }
+          dict = (fbOk && Object.keys(fbDict).length === nbPartiesToPlan)
+            ? fbDict
+            : api.buildDictRotationsWithExclus(previewFullTirage, exclus, nbPartiesToPlan)
+        } else {
+          dict = api.buildDictRotationsWithExclus(previewFullTirage, exclus, nbPartiesToPlan)
+        }
         api.setDernierFullTirage(previewFullTirage)
         api.setDernierDictRotations(dict)
         await api.updateRotationsDisplay()
@@ -327,6 +344,15 @@ export function initComposition (api) {
       closeCompositionModal()
       return
     }
+
+    // Effacer les données stales de l'ancien tirage avant d'écrire les nouvelles.
+    // Cela évite qu'un ancien tirage (avec l'exclu) persiste dans localStorage
+    // et interfère avec le redémarrage de l'application.
+    try {
+      localStorage.removeItem('tarot_tirage')
+      localStorage.removeItem('tarot_full_tirage')
+      if (typeof api.clearExcluSeatIndex === 'function') api.clearExcluSeatIndex()
+    } catch (_eClear) {}
 
     // fetch exclusions and remove them from remaining so user-placed list
     // contains only the active placeable players for the manche
@@ -426,13 +452,11 @@ export function initComposition (api) {
     } catch (e) { console.warn('Failed to build rotations from manual composition', e) }
 
     try {
-      // Mirror normal tirage flow: persist the "active" tirage (sans exclu)
-      // while keeping `dernierFullTirage` (full) with exclu for labels.
-      const exclus = await api.getExclusTournoi().catch(() => [])
-      let activeToSave = (full || []).slice()
-      if (Array.isArray(exclus) && exclus.length > 0 && exclus[0]) {
-        activeToSave = (full || []).filter(p => String((p && p.nom) || p).trim() !== String(exclus[0]).trim())
-      }
+      // Persister le tirage actif (sans l'exclu) en utilisant exclSet
+      // déjà connu — pas de second appel à getExclusTournoi() qui pourrait échouer.
+      const activeToSave = (exclSet && exclSet.size > 0)
+        ? (full || []).filter(p => !exclSet.has(String((p && p.nom) || p).trim()))
+        : (full || []).slice()
       await api.saveTirage(activeToSave)
     } catch (_e) {}
     try { await api.updateRotationsDisplay() } catch (_e) {}
