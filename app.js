@@ -7185,104 +7185,52 @@ btnFinTournoi.addEventListener('click', async () => {
         console.warn('Impossible de charger full tirage:', e)
       }
 
-      const dict = calculRotationsRainbow(tirageExistant, nbPartiesToPlan)
-      dernierDictRotations = dict
-
-      // Restaurer les exclus si le fichier existe et ajuster leur longueur
+      // Restaurer les exclus si le fichier existe et ajuster leur longueur.
+      // Stratégie simple et robuste : on filtre directement les exclus du tirage
+      // par manche, sans dépendre de seatIndex ni de tarot_full_tirage.
+      // Fonctionne que le tirage soit stocké avec ou sans l'exclu.
+      let exclusArrInit = []
       try {
-        let exclusArr = await getExclusTournoi()
-        if (!Array.isArray(exclusArr)) exclusArr = []
-        if (exclusArr.length > 0) {
-          if (exclusArr.length < nbParties) {
-            for (let i = exclusArr.length; i < nbParties; i++) exclusArr[i] = null
-            await setExclusTournoi(exclusArr)
-          }
-          // FIX: rebuild rotations with exclu logic so the excluded player does not appear
-          // in the Saisie on app restart. calculRotationsRainbow (used above) has no
-          // knowledge of excluded players, so we must replace its result here.
-
-          // On GitHub Pages (browser), tarot_full_tirage may be absent from localStorage
-          // (first visit, or no composition done in browser yet). In that case tirageExistant
-          // already contains the exclu player → reconstruct a temporary dernierFullTirage so
-          // that the seatIndex restoration below can work.
-          if ((!dernierFullTirage || dernierFullTirage.length === 0) && tirageExistant && tirageExistant.length > 0) {
-            const reconstructed = tirageExistant.map(p => ({ ...p }))
-            exclusArr.filter(Boolean).forEach(nm => {
-              const nmLow = String(nm).trim().toLowerCase()
-              if (!reconstructed.some(p => String(p && p.nom || '').trim().toLowerCase() === nmLow)) {
-                reconstructed.push({ nom: nm, numero: reconstructed.length + 1 })
-              }
-            })
-            dernierFullTirage = reconstructed
-            try { localStorage.setItem('tarot_full_tirage', JSON.stringify(dernierFullTirage)) } catch (_e) {}
-          }
-
-          if (dernierFullTirage && dernierFullTirage.length > 0) {
-            // Always recompute seatIndex from dernierFullTirage so that stale / negative
-            // values left in localStorage (e.g. from a different browser session or tournament)
-            // never cause computeActiveFromBase to return the full base with the exclu player.
-            const firstExclu = exclusArr.find(Boolean)
-            if (firstExclu) {
-              const idx = dernierFullTirage.findIndex(
-                p => p && String(p.nom || '').trim().toLowerCase() === String(firstExclu).trim().toLowerCase()
-              )
-              if (idx >= 0) setExcluSeatIndex(idx)
-            }
-            const si = getExcluSeatIndex()
-            console.warn('[init exclu] seatIndex:', si, '| firstExclu:', firstExclu, '| fullTirage.length:', dernierFullTirage.length, '| tirageExistant.length:', tirageExistant.length, '| exclusArr:', JSON.stringify(exclusArr))
-            if (si !== null && si >= 0 && si < dernierFullTirage.length) {
-              try {
-                dernierDictRotations = buildDictRotationsWithExclus(dernierFullTirage, exclusArr, nbPartiesToPlan)
-              } catch (_eR) {
-                console.warn('init: buildDictRotationsWithExclus failed, keeping calculRotationsRainbow result', _eR)
-              }
-            } else {
-              console.warn('[init exclu] seatIndex invalide ou hors limites, rotations non reconstruites', { si, len: dernierFullTirage.length })
-            }
-          }
-
-          // Safety net: if the exclu player is still present in Manche 1 rotation after the
-          // fix above (e.g. seatIndex was wrong or buildDictRotationsWithExclus silently failed),
-          // fall back to a per-manche calculation by filtering directly from tirageExistant.
-          // This guarantees the exclu never appears in the Saisie regardless of session state.
-          try {
-            const firstExcluCheck = exclusArr.find(Boolean)
-            if (firstExcluCheck) {
-              const exLowCheck = String(firstExcluCheck).trim().toLowerCase()
-              const manche1 = dernierDictRotations['Manche 1'] || []
-              const excluStillPresent = manche1.some(t =>
-                Array.isArray(t && t.joueurs) && t.joueurs.some(p => p && String(p.nom || '').trim().toLowerCase() === exLowCheck)
-              )
-              if (excluStillPresent) {
-                console.warn('[init exclu] FALLBACK: exclu encore dans Manche 1, recalcul par filtre direct')
-                const fbDict = {}
-                let fbOk = true
-                for (let r = 0; r < nbPartiesToPlan; r++) {
-                  const exNom = exclusArr[r] || null
-                  const exLow = exNom ? String(exNom).trim().toLowerCase() : null
-                  const active = exLow
-                    ? tirageExistant.filter(p => String(p && p.nom || '').trim().toLowerCase() !== exLow)
-                    : tirageExistant
-                  if (!active.length) { fbOk = false; break }
-                  const sub = calculRotationsRainbow(active, 1)
-                  if (!sub || !sub['Manche 1']) { fbOk = false; break }
-                  fbDict[`Manche ${r + 1}`] = sub['Manche 1']
-                }
-                if (fbOk && Object.keys(fbDict).length === nbPartiesToPlan) {
-                  dernierDictRotations = fbDict
-                  console.warn('[init exclu] FALLBACK appliqué, exclu retiré par filtre direct')
-                }
-              }
-            }
-          } catch (_eFb) {
-            console.warn('[init exclu] erreur vérification fallback:', _eFb)
-          }
-
-          // Mettre à jour affichage pour montrer qui est exclu par manche
-          await updateRotationsDisplay()
+        let ea = await getExclusTournoi()
+        if (!Array.isArray(ea)) ea = []
+        if (ea.length < nbParties) {
+          for (let i = ea.length; i < nbParties; i++) ea[i] = null
+          await setExclusTournoi(ea)
         }
+        exclusArrInit = ea
       } catch (eEx) {
-        console.warn('Impossible de restaurer exclus au démarrage:', eEx.message || eEx)
+        console.warn('Impossible de charger exclus au démarrage:', eEx.message || eEx)
+      }
+
+      if (exclusArrInit.some(Boolean)) {
+        // Filtre par manche : on retire l'exclu de ce tour directement du tirage.
+        // getNom gère à la fois les strings et les objets {nom, numero}.
+        const getNom = p => String((p && typeof p === 'object' ? (p.nom || '') : (p || ''))).trim().toLowerCase()
+        try {
+          const fbDict = {}
+          let fbOk = true
+          for (let r = 0; r < nbPartiesToPlan; r++) {
+            const exNom = exclusArrInit[r] || null
+            const exLow = exNom ? String(exNom).trim().toLowerCase() : null
+            const active = exLow
+              ? tirageExistant.filter(p => getNom(p) !== exLow)
+              : tirageExistant
+            if (!active.length) { fbOk = false; break }
+            const sub = calculRotationsRainbow(active, 1)
+            if (!sub || !sub['Manche 1']) { fbOk = false; break }
+            fbDict[`Manche ${r + 1}`] = sub['Manche 1']
+          }
+          if (fbOk && Object.keys(fbDict).length === nbPartiesToPlan) {
+            dernierDictRotations = fbDict
+          } else {
+            dernierDictRotations = calculRotationsRainbow(tirageExistant, nbPartiesToPlan)
+          }
+        } catch (_eR) {
+          dernierDictRotations = calculRotationsRainbow(tirageExistant, nbPartiesToPlan)
+        }
+        await updateRotationsDisplay()
+      } else {
+        dernierDictRotations = calculRotationsRainbow(tirageExistant, nbPartiesToPlan)
       }
 
       mettreAJourSelectRotationsEtTables()
