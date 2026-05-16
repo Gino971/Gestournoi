@@ -57,7 +57,7 @@ import { generateSerpentinTables } from './serpentin.js?v=19'
 import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=19'
 import { buildClassementFromRecap } from './lib/classement-utils.js?v=19'
 import { askConfirm, _showCustomDialog } from './lib/dialogs.js?v=19'
-import { initComposition } from './lib/composition.js?v=19'
+import { initComposition } from './lib/composition.js?v=20'
 
 // Version badge — populated at startup from DOM script/link src attributes
 const APP_VERSION = '19'
