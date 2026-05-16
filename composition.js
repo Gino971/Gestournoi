@@ -454,10 +454,13 @@ export function initComposition (api) {
     } catch (e) { console.warn('Failed to build rotations from manual composition', e) }
 
     try {
-      // Persister le tirage actif (sans l'exclu) en utilisant exclSet
-      // déjà connu — pas de second appel à getExclusTournoi() qui pourrait échouer.
-      const activeToSave = (exclSet && exclSet.size > 0)
-        ? (full || []).filter(p => !exclSet.has(String((p && p.nom) || p).trim()))
+      // Persister le tirage actif (sans l'exclu de la manche 1 uniquement).
+      // On utilise exclusArr[0] (déjà chargé) et non exclSet qui contient TOUS
+      // les exclus de toutes les manches — filtrer tous les exclus retrancherait
+      // à tort les joueurs exclus des manches 2, 3, etc.
+      const exclu0 = (exclusArr && exclusArr.length > 0 && exclusArr[0]) ? String(exclusArr[0]).trim() : ''
+      const activeToSave = exclu0
+        ? (full || []).filter(p => String((p && p.nom) || p).trim() !== exclu0)
         : (full || []).slice()
       await api.saveTirage(activeToSave)
     } catch (_e) {}

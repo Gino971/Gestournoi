@@ -7236,24 +7236,28 @@ btnFinTournoi.addEventListener('click', async () => {
 
       mettreAJourSelectRotationsEtTables()
 
-      if (planHeadingEl) {
-        planHeadingEl.textContent =
-          'Plan de table : ' + getTypeMouvementLabelFromTirage(tirageExistant)
-      }
+      // Pour le mode sans exclu uniquement : appliquer le template simple et l'en-tête basique.
+      // En mode exclu, updateRotationsDisplay() a déjà écrit le contenu correct —
+      // NE PAS L'ÉCRASER, sinon les étiquettes "Exclu" disparaissent au redémarrage.
+      if (!exclusArrInit.some(Boolean)) {
+        if (planHeadingEl) {
+          planHeadingEl.textContent =
+            'Plan de table : ' + getTypeMouvementLabelFromTirage(tirageExistant)
+        }
 
-      rotationsResultDiv.innerHTML = Object.entries(dernierDictRotations)
-        .map(([nomRot, tables], mancheIndex) => {
-          const blocTables = tables
-            .map((t) => {
-              const [n, s, e, o, x, y] = t.joueurs
-              let exemptHtml = ''
-              if (x) {
-                exemptHtml += `<div class="table-seat table-seat-exemption"><span>${x.nom || '?'}</span></div>`
-              }
-              if (y) {
-                exemptHtml += `<div class="table-seat table-seat-exemption-2"><span>${y.nom || '?'}</span></div>`
-              }
-              return `
+        rotationsResultDiv.innerHTML = Object.entries(dernierDictRotations)
+          .map(([nomRot, tables], mancheIndex) => {
+            const blocTables = tables
+              .map((t) => {
+                const [n, s, e, o, x, y] = t.joueurs
+                let exemptHtml = ''
+                if (x) {
+                  exemptHtml += `<div class="table-seat table-seat-exemption"><span>${x.nom || '?'}</span></div>`
+                }
+                if (y) {
+                  exemptHtml += `<div class="table-seat table-seat-exemption-2"><span>${y.nom || '?'}</span></div>`
+                }
+                return `
                 <div class="table-card">
                   <div class="table-card-center-label">Table ${t.table}</div>
                   <div class="table-seat table-seat-north">
@@ -7271,15 +7275,10 @@ btnFinTournoi.addEventListener('click', async () => {
                   ${exemptHtml}
                 </div>
               `
-            })
-            .join('')
+              })
+              .join('')
 
-          // If we restored a tirage at startup, unlock the UI if number of players >= 12
-          try {
-            maybeUnlockUIForNormalFlow()
-          } catch (e) { console.warn('unlock on init failed', e) }
-
-          return `
+            return `
             <section class="rotation-block">
               <h3>Manche ${mancheIndex + 1}</h3>
               <div class="rotation-tables">
@@ -7287,8 +7286,12 @@ btnFinTournoi.addEventListener('click', async () => {
               </div>
             </section>
           `
-        })
-        .join('')
+          })
+          .join('')
+      }
+
+      // Toujours s'assurer que l'UI est déverrouillée si le tirage est suffisamment grand
+      try { maybeUnlockUIForNormalFlow() } catch (e) { console.warn('unlock on init failed', e) }
 
       // On active l'onglet "Plan de table" si le tirage existe (optionnel, selon préférence utilisateur)
       // document.querySelector('button[data-screen="plan"]').click();
