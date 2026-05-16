@@ -23,8 +23,10 @@ export function initComposition (api) {
       try { await api.setScoresParTable([]) } catch (_e2) {}
       try { api.clearAllValidatedMancheSnapshots() } catch (_e2) {}
       try { localStorage.removeItem('scores_par_table') } catch (_e2) {}
+      // renderFeuilleSoiree pour zéroer la Saisie avant que l'utilisateur ne la voie.
+      // updateRotationsDisplay() est intentionnellement omis ici : si dernierDictRotations
+      // est null et listeTournoi.length % 4 === 0, il effacerait les exclus.
       try { if (typeof api.renderFeuilleSoiree === 'function') await api.renderFeuilleSoiree() } catch (_e) {}
-      try { if (typeof api.updateRotationsDisplay === 'function') await api.updateRotationsDisplay() } catch (_e) {}
     } catch (_e) {
       console.warn('composition: failed to reset on open', _e)
     }
