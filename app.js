@@ -7218,26 +7218,26 @@ btnFinTournoi.addEventListener('click', async () => {
           }
 
           if (dernierFullTirage && dernierFullTirage.length > 0) {
-            // Restore seatIndex if not persisted (e.g. first launch after setting exclus).
-            // seatIndex = position of the first exclu player in dernierFullTirage.
-            if (getExcluSeatIndex() === null) {
-              const firstExclu = exclusArr.find(Boolean)
-              if (firstExclu) {
-                const idx = dernierFullTirage.findIndex(
-                  p => p && String(p.nom || '').trim().toLowerCase() === String(firstExclu).trim().toLowerCase()
-                )
-                if (idx >= 0) setExcluSeatIndex(idx)
-              }
+            // Always recompute seatIndex from dernierFullTirage so that stale / negative
+            // values left in localStorage (e.g. from a different browser session or tournament)
+            // never cause computeActiveFromBase to return the full base with the exclu player.
+            const firstExclu = exclusArr.find(Boolean)
+            if (firstExclu) {
+              const idx = dernierFullTirage.findIndex(
+                p => p && String(p.nom || '').trim().toLowerCase() === String(firstExclu).trim().toLowerCase()
+              )
+              if (idx >= 0) setExcluSeatIndex(idx)
             }
-            // Only rebuild when seatIndex is known; otherwise buildDictRotationsWithExclus
-            // falls back to an unconstrained calculRotationsRainbow that may produce
-            // tables of wrong sizes (e.g. tables of 5 when exclu mode expects 4).
-            if (getExcluSeatIndex() !== null) {
+            const si = getExcluSeatIndex()
+            console.log('[init exclu] seatIndex:', si, 'firstExclu:', firstExclu, 'dernierFullTirage.length:', dernierFullTirage.length, 'exclusArr:', exclusArr)
+            if (si !== null && si >= 0 && si < dernierFullTirage.length) {
               try {
                 dernierDictRotations = buildDictRotationsWithExclus(dernierFullTirage, exclusArr, nbPartiesToPlan)
               } catch (_eR) {
                 console.warn('init: buildDictRotationsWithExclus failed, keeping calculRotationsRainbow result', _eR)
               }
+            } else {
+              console.warn('[init exclu] seatIndex invalide ou hors limites, rotations non reconstruites', { si, len: dernierFullTirage.length })
             }
           }
           // Mettre à jour affichage pour montrer qui est exclu par manche
