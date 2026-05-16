@@ -2414,6 +2414,7 @@ const { openCompositionModal: _openCompositionModal, closeCompositionModal: _clo
   setDernierDictRotations: (v) => { dernierDictRotations = v },
   getExclusTournoi,
   buildDictRotationsWithExclus,
+  calculRotationsRainbow,
   updateRotationsDisplay,
   mettreAJourSelectRotationsEtTables,
   renderListeTournoi,
