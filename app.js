@@ -58,6 +58,27 @@ import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStor
 import { buildClassementFromRecap } from './lib/classement-utils.js?v=19'
 import { askConfirm, _showCustomDialog } from './lib/dialogs.js?v=19'
 import { initComposition } from './lib/composition.js?v=19'
+
+// Version badge — populated at startup from DOM script/link src attributes
+const APP_VERSION = '19'
+;(function () {
+  const badge = document.getElementById('version-badge')
+  if (!badge) return
+  const entries = [
+    ...document.querySelectorAll('link[rel="stylesheet"][href]'),
+    ...document.querySelectorAll('script[src]')
+  ]
+    .map(el => {
+      const url = el.getAttribute('href') || el.getAttribute('src') || ''
+      const m = url.match(/([^/?]+\.(?:js|css))(?:\?v=(\d+))?/)
+      if (!m) return null
+      return m[2] ? `${m[1]} v${m[2]}` : m[1]
+    })
+    .filter(Boolean)
+  badge.textContent = entries.length ? entries.join('\n') : `v${APP_VERSION}`
+  badge.style.pointerEvents = 'auto'
+  badge.style.cursor = 'default'
+})()
 // Temporary build identifier for manual served-file verification (do not commit)
 const FRONTEND_BUILD_ID = 'frontend-build-2026-04-17T23:30:00Z'
 
