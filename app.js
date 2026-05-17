@@ -57,7 +57,7 @@ import { generateSerpentinTables } from './serpentin.js?v=19'
 import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=19'
 import { buildClassementFromRecap } from './lib/classement-utils.js?v=19'
 import { askConfirm, _showCustomDialog } from './lib/dialogs.js?v=19'
-import { initComposition } from './lib/composition.js?v=20'
+import { initComposition } from './lib/composition.js?v=21'
 
 // Version badge — populated at startup from DOM script/link src attributes
 const APP_VERSION = '19'
@@ -3508,6 +3508,21 @@ async function renderSaisieParTable () {
     const selIdxTop = (selectRotation && typeof selectRotation.selectedIndex === 'number') ? selectRotation.selectedIndex : 0
     const excluForSelectedManche = (exclusArr && exclusArr[selIdxTop]) ? String(exclusArr[selIdxTop]).trim() : null
 
+    // Si l'exclu n'apparaît dans aucune colonne de table (cas normal en mode exclu),
+    // afficher un bandeau informatif en haut de la saisie.
+    if (excluForSelectedManche) {
+      const excluPresentInAnyTable = (normalizedTables || []).some(t =>
+        (t.players || []).some(p => String(p || '').trim() === excluForSelectedManche)
+      )
+      if (!excluPresentInAnyTable) {
+        const excluBanner = document.createElement('div')
+        excluBanner.className = 'exclu-saisie-banner'
+        excluBanner.innerHTML = `<strong>${excluForSelectedManche}</strong> est exclu(e) pour cette manche — il/elle ne participe pas au jeu.`
+        excluBanner.style.cssText = 'padding:8px 14px;margin-bottom:10px;background:#4a2800;color:#ffcc88;border-radius:5px;border-left:4px solid #e07000;font-size:0.95em;'
+        containerSaisie.appendChild(excluBanner)
+      }
+    }
+
     normalizedTables.forEach((tData) => {
       // Timer de debounce partagé pour toutes les cellules de cette table
       let _saveTimer = null
@@ -3956,7 +3971,12 @@ async function renderSaisie () {
   } catch (_e) {}
 
   if (!containerSaisie) return
-  if (_renderingSaisieLock) return
+  if (_renderingSaisieLock) {
+    // Un render est déjà en cours — programmer un re-render pour que les données
+    // réinitialisées (reset scores) soient bien affichées après la fin du render actuel.
+    _pendingRenderSaisie = true
+    return
+  }
 
   // Delegate exclusively to the per-table matrix renderer
   try {
@@ -7195,7 +7215,10 @@ btnFinTournoi.addEventListener('click', async () => {
         let ea = await getExclusTournoi()
         if (!Array.isArray(ea)) ea = []
         if (ea.length < nbParties) {
-          for (let i = ea.length; i < nbParties; i++) ea[i] = null
+          // Propager le premier exclu à toutes les manches non encore configurées.
+          // En mode joueur exclu, le même joueur reste exclu sur l'ensemble de la soirée.
+          const defaultExclu = ea[0] || null
+          for (let i = ea.length; i < nbParties; i++) ea[i] = defaultExclu
           await setExclusTournoi(ea)
         }
         exclusArrInit = ea
@@ -7204,28 +7227,14 @@ btnFinTournoi.addEventListener('click', async () => {
       }
 
       if (exclusArrInit.some(Boolean)) {
-        // Filtre par manche : on retire l'exclu de ce tour directement du tirage.
-        // getNom gère à la fois les strings et les objets {nom, numero}.
-        const getNom = p => String((p && typeof p === 'object' ? (p.nom || '') : (p || ''))).trim().toLowerCase()
+        // Utiliser exactement le même chemin que le jeu live : buildDictRotationsWithExclus.
+        // On préfère dernierFullTirage (contient l'exclu) sur tirageExistant (exclu filtré).
+        // buildDictRotationsWithExclus ajoute automatiquement les exclus manquants à la base.
+        const tiragePourRotation = (Array.isArray(dernierFullTirage) && dernierFullTirage.length > 0)
+          ? dernierFullTirage
+          : tirageExistant
         try {
-          const fbDict = {}
-          let fbOk = true
-          for (let r = 0; r < nbPartiesToPlan; r++) {
-            const exNom = exclusArrInit[r] || null
-            const exLow = exNom ? String(exNom).trim().toLowerCase() : null
-            const active = exLow
-              ? tirageExistant.filter(p => getNom(p) !== exLow)
-              : tirageExistant
-            if (!active.length) { fbOk = false; break }
-            const sub = calculRotationsRainbow(active, 1)
-            if (!sub || !sub['Manche 1']) { fbOk = false; break }
-            fbDict[`Manche ${r + 1}`] = sub['Manche 1']
-          }
-          if (fbOk && Object.keys(fbDict).length === nbPartiesToPlan) {
-            dernierDictRotations = fbDict
-          } else {
-            dernierDictRotations = calculRotationsRainbow(tirageExistant, nbPartiesToPlan)
-          }
+          dernierDictRotations = buildDictRotationsWithExclus(tiragePourRotation, exclusArrInit, nbPartiesToPlan)
         } catch (_eR) {
           dernierDictRotations = calculRotationsRainbow(tirageExistant, nbPartiesToPlan)
         }
