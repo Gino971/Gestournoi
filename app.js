@@ -2435,6 +2435,7 @@ const { openCompositionModal: _openCompositionModal, closeCompositionModal: _clo
   saveTirage,
   clearAllLucky,
   renderFeuilleSoiree,
+  renderSaisie,
   updateLuckyButtonState,
   applyExclusToRotations
 })
@@ -3507,21 +3508,6 @@ async function renderSaisieParTable () {
     // selected manche index for header labelling (used to mark excluded seat)
     const selIdxTop = (selectRotation && typeof selectRotation.selectedIndex === 'number') ? selectRotation.selectedIndex : 0
     const excluForSelectedManche = (exclusArr && exclusArr[selIdxTop]) ? String(exclusArr[selIdxTop]).trim() : null
-
-    // Si l'exclu n'apparaît dans aucune colonne de table (cas normal en mode exclu),
-    // afficher un bandeau informatif en haut de la saisie.
-    if (excluForSelectedManche) {
-      const excluPresentInAnyTable = (normalizedTables || []).some(t =>
-        (t.players || []).some(p => String(p || '').trim() === excluForSelectedManche)
-      )
-      if (!excluPresentInAnyTable) {
-        const excluBanner = document.createElement('div')
-        excluBanner.className = 'exclu-saisie-banner'
-        excluBanner.innerHTML = `<strong>${excluForSelectedManche}</strong> est exclu(e) pour cette manche — il/elle ne participe pas au jeu.`
-        excluBanner.style.cssText = 'padding:8px 14px;margin-bottom:10px;background:#4a2800;color:#ffcc88;border-radius:5px;border-left:4px solid #e07000;font-size:0.95em;'
-        containerSaisie.appendChild(excluBanner)
-      }
-    }
 
     normalizedTables.forEach((tData) => {
       // Timer de debounce partagé pour toutes les cellules de cette table

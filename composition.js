@@ -23,6 +23,9 @@ export function initComposition (api) {
       try { await api.setScoresParTable([]) } catch (_e2) {}
       try { api.clearAllValidatedMancheSnapshots() } catch (_e2) {}
       try { localStorage.removeItem('scores_par_table') } catch (_e2) {}
+      // Forcer un re-rendu immédiat de la Saisie avec les données vidées,
+      // pour éviter toute race condition IPC où l'ancien rendu lirait le fichier avant la réinitialisation.
+      try { if (typeof api.renderSaisie === 'function') await api.renderSaisie() } catch (_e) {}
       // renderFeuilleSoiree pour zéroer la Saisie avant que l'utilisateur ne la voie.
       // updateRotationsDisplay() est intentionnellement omis ici : si dernierDictRotations
       // est null et listeTournoi.length % 4 === 0, il effacerait les exclus.
@@ -468,6 +471,9 @@ export function initComposition (api) {
 
     try { api.clearAllLucky() } catch (_e) {}
     try { await api.renderFeuilleSoiree() } catch (_e) {}
+    // Re-render Saisie avec les nouvelles rotations et les scores réinitialisés.
+    // Garantit que les anciens scores de la partie précédente ne restent pas affichés.
+    try { if (typeof api.renderSaisie === 'function') await api.renderSaisie() } catch (_e) {}
     try { await api.updateLuckyButtonState() } catch (_e) {}
 
     compositionPreviewBackup = null
