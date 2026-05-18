@@ -1333,6 +1333,10 @@ let _renderingSaisieLock = false
 let _pendingRenderSaisie = false
 // remember the last rotation key rendered so we can detect manual switches
 let _lastRenderedRotation = null
+// Generation counter: incrémenté à chaque remise à zéro des scores.
+// Les timers d'autosave capturent la génération courante et s'annulent si elle a changé.
+let _scoresParTableGeneration = 0
+function invalidateScoresParTable () { _scoresParTableGeneration++ }
 // Redistribution feature removed — no runtime state kept
 // Date of the tournament that was just finished via 'Fin de tournoi' — used to force display of gains immediately
 let justFinishedTournamentDate = null
@@ -2436,6 +2440,7 @@ const { openCompositionModal: _openCompositionModal, closeCompositionModal: _clo
   clearAllLucky,
   renderFeuilleSoiree,
   renderSaisie,
+  invalidateScoresParTable,
   updateLuckyButtonState,
   applyExclusToRotations
 })
@@ -3838,7 +3843,11 @@ async function renderSaisieParTable () {
             // autosave avec debounce : évite de saturer le canal IPC à chaque frappe.
             // Lecture depuis le cache localStorage (synchrone) pour supprimer l'aller-retour IPC en lecture.
             clearTimeout(_saveTimer)
+            const _genAtSave = _scoresParTableGeneration
             _saveTimer = setTimeout(async () => {
+              // Si les scores ont été réinitialisés entre-temps (nouvelle composition),
+              // ne pas réécrire les anciens scores dans le stockage.
+              if (_scoresParTableGeneration !== _genAtSave) return
               try {
                 let tablesData
                 try {

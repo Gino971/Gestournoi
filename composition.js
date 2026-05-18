@@ -23,6 +23,9 @@ export function initComposition (api) {
       try { await api.setScoresParTable([]) } catch (_e2) {}
       try { api.clearAllValidatedMancheSnapshots() } catch (_e2) {}
       try { localStorage.removeItem('scores_par_table') } catch (_e2) {}
+      // Invalider tous les timers d'autosave en attente pour éviter qu'ils
+      // réécrivent d'anciens scores après la remise à zéro.
+      try { if (typeof api.invalidateScoresParTable === 'function') api.invalidateScoresParTable() } catch (_e2) {}
       // Forcer un re-rendu immédiat de la Saisie avec les données vidées,
       // pour éviter toute race condition IPC où l'ancien rendu lirait le fichier avant la réinitialisation.
       try { if (typeof api.renderSaisie === 'function') await api.renderSaisie() } catch (_e) {}
@@ -438,6 +441,9 @@ export function initComposition (api) {
       try { await api.setScoresParTable([]) } catch (_e) {}
       try { api.clearAllValidatedMancheSnapshots() } catch (_e) {}
       try { localStorage.removeItem('scores_par_table') } catch (_e) {}
+      // Invalider tous les timers d'autosave en attente pour éviter qu'ils
+      // réécrivent d'anciens scores après la remise à zéro.
+      try { if (typeof api.invalidateScoresParTable === 'function') api.invalidateScoresParTable() } catch (_e) {}
     } catch (e) { console.warn('Failed to set initial scores from composition', e) }
 
     // In exclu mode, persist the exclu's seat position before building rotations
