@@ -260,7 +260,8 @@ export function initComposition (api) {
         Array.from(exclSet).forEach(nm => { previewFullTirage.push({ nom: nm, numero: ++idx }) })
         try {
           if (typeof api.setExcluSeatIndex === 'function') {
-            const excluIdx = previewFullTirage.findIndex(p => exclSet.has(p.nom))
+            const exclNorm = new Set(Array.from(exclSet).map(n => String(n || '').trim().toLowerCase()).filter(Boolean))
+            const excluIdx = previewFullTirage.findIndex(p => exclNorm.has(String((p && p.nom) || '').trim().toLowerCase()))
             if (excluIdx >= 0) api.setExcluSeatIndex(excluIdx)
           }
         } catch (_e) {}
@@ -380,19 +381,11 @@ export function initComposition (api) {
 
     let full = []
     if (exclSet && exclSet.size > 0) {
-      // In exclu mode: persist a full list that still contains the excluded
-      // players so labels remain available for plan/saisie. We only change
-      // the persisted ordering here; table assignment will continue to
-      // exclude them via existing rotation logic.
-      const finalOrder = []
-      let ptr = 0
-      for (let i = 0; i < baseOrder.length; i++) {
-        const name = baseOrder[i]
-        if (exclSet.has(name)) finalOrder.push(name)
-        else finalOrder.push(fullOrder[ptr++] || name)
-      }
-      while (ptr < fullOrder.length) finalOrder.push(fullOrder[ptr++])
-      full = finalOrder.map((nm, idx) => ({ nom: nm, numero: idx + 1 }))
+      // Aligner avec la prévisualisation: joueurs actifs dans l'ordre composé,
+      // puis exclu(s) à la fin. Évite les décalages entre preview et validation.
+      let idx = 0
+      full = (fullOrder || []).map(nm => ({ nom: nm, numero: ++idx }))
+      Array.from(exclSet).forEach(nm => { full.push({ nom: nm, numero: ++idx }) })
     } else if (mortNamesFinal.length > 0) {
       // Final composition: place morts then fill remaining seats N,S,E,O
       full = placeMortsAndFill(composed)
@@ -455,7 +448,8 @@ export function initComposition (api) {
     // so buildDictRotationsWithExclus removes the correct player (by name) each manche.
     try {
       if (exclSet.size > 0 && typeof api.setExcluSeatIndex === 'function') {
-        const excluIdx = full.findIndex(p => exclSet.has(p.nom))
+        const exclNorm = new Set(Array.from(exclSet).map(n => String(n || '').trim().toLowerCase()).filter(Boolean))
+        const excluIdx = full.findIndex(p => exclNorm.has(String((p && p.nom) || '').trim().toLowerCase()))
         if (excluIdx >= 0) api.setExcluSeatIndex(excluIdx)
       }
     } catch (_e) {}
