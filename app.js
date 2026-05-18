@@ -39,10 +39,10 @@ import {
   setRecap,
   getExclusTournoi,
   setExclusTournoi
-} from './api.js?v=23'
+} from './api.js?v=24'
 
-import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=23'
-import { computeEligible } from './lucky-utils.js?v=23'
+import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=24'
+import { computeEligible } from './lucky-utils.js?v=24'
 import {
   tirageAuSort,
   transfertTotauxTable,
@@ -51,16 +51,16 @@ import {
   distributeAttackerScore,
   validateAttackerDivisibility,
   placeAttackerAtIndex
-} from './coreTournoi.js?v=23'
-import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=23'
-import { generateSerpentinTables } from './serpentin.js?v=23'
-import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=23'
-import { buildClassementFromRecap } from './lib/classement-utils.js?v=23'
-import { askConfirm, _showCustomDialog } from './lib/dialogs.js?v=23'
-import { initComposition } from './lib/composition.js?v=23'
+} from './coreTournoi.js?v=24'
+import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=24'
+import { generateSerpentinTables } from './serpentin.js?v=24'
+import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=24'
+import { buildClassementFromRecap } from './lib/classement-utils.js?v=24'
+import { askConfirm, _showCustomDialog } from './lib/dialogs.js?v=24'
+import { initComposition } from './lib/composition.js?v=24'
 
 // Version badge — populated at startup from DOM script/link src attributes
-const APP_VERSION = '20'
+const APP_VERSION = '21'
 ;(function () {
   const badge = document.getElementById('version-badge')
   if (!badge) return
@@ -1153,7 +1153,7 @@ if (btnRestaurationNav) {
 const planHeadingEl = document.getElementById('plan-heading')
 
 // Minuteur
-import initTimer from './timer.js?v=23'
+import initTimer from './timer.js?v=24'
 try { initTimer() } catch (_e) { /* ignore if timer DOM not ready */ }
 
 
@@ -2321,12 +2321,28 @@ function buildDictRotationsWithExclus (fullTirage, exclusArr, nbParties) {
   // avec le tirage courant (modeExclu=true) et on réutilise les manches.
   if (seatIndex === null) {
     try {
-      // If no seatIndex is configured, decide whether to use exclu mode based on persisted exclus array
-      const modeExcluAuto = (Array.isArray(exclusArr) && exclusArr.length > 0 && exclusArr[0]) && getMode() !== 'tables56'
-      console.debug('buildDictRotationsWithExclus: seatIndex null', { baseLen: base.length, modeExcluAuto, exclusArr })
-      const all = calculRotationsRainbow(base, nbParties, modeExcluAuto)
-      for (let r = 0; r < nbParties; r++) {
-        dict[`Manche ${r + 1}`] = all[`Manche ${r + 1}`] || []
+      // Fallback robuste: si des exclus existent mais seatIndex est absent,
+      // on retire explicitement l'exclu de chaque manche avant calcul.
+      // Cela évite d'inclure l'exclu à table et d'éjecter le dernier joueur.
+      const hasExclus = Array.isArray(exclusArr) && exclusArr.some(e => String(e || '').trim() !== '')
+      console.debug('buildDictRotationsWithExclus: seatIndex null', { baseLen: base.length, hasExclus, exclusArr })
+
+      if (hasExclus) {
+        const getNom = p => String((p && typeof p === 'object' ? (p.nom || '') : (p || ''))).trim().toLowerCase()
+        const defaultExclu = (exclusArr.find(e => String(e || '').trim() !== '') || null)
+
+        for (let r = 0; r < nbParties; r++) {
+          const exNom = (exclusArr && exclusArr[r]) ? exclusArr[r] : defaultExclu
+          const exLow = exNom ? String(exNom).trim().toLowerCase() : null
+          const active = exLow ? base.filter(p => getNom(p) !== exLow) : base.slice()
+          const sub = calculRotationsRainbow(active, 1, false)
+          dict[`Manche ${r + 1}`] = sub['Manche 1'] || []
+        }
+      } else {
+        const all = calculRotationsRainbow(base, nbParties, false)
+        for (let r = 0; r < nbParties; r++) {
+          dict[`Manche ${r + 1}`] = all[`Manche ${r + 1}`] || []
+        }
       }
     } catch (e) {
       console.warn('Erreur calcul rotations (sans seatIndex):', e)
