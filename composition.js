@@ -19,13 +19,13 @@ export function initComposition (api) {
       const exclusArr = (await api.getExclusTournoi()) || []
       exclSet = new Set((exclusArr || []).filter(Boolean))
       const initScores = (api.getListeTournoi() || []).map(n => [n, 0])
+      // Invalider EN PREMIER (synchrone, avant tout await) : si un timer d'autosave
+      // se déclenche PENDANT l'attente IPC de setScoresParTable, il sera déjà rejeté.
+      try { if (typeof api.invalidateScoresParTable === 'function') api.invalidateScoresParTable() } catch (_e2) {}
       await api.setScoresTournoi(initScores)
       try { await api.setScoresParTable([]) } catch (_e2) {}
       try { api.clearAllValidatedMancheSnapshots() } catch (_e2) {}
       try { localStorage.removeItem('scores_par_table') } catch (_e2) {}
-      // Invalider tous les timers d'autosave en attente pour éviter qu'ils
-      // réécrivent d'anciens scores après la remise à zéro.
-      try { if (typeof api.invalidateScoresParTable === 'function') api.invalidateScoresParTable() } catch (_e2) {}
       // Forcer un re-rendu immédiat de la Saisie avec les données vidées,
       // pour éviter toute race condition IPC où l'ancien rendu lirait le fichier avant la réinitialisation.
       try { if (typeof api.renderSaisie === 'function') await api.renderSaisie() } catch (_e) {}
@@ -437,13 +437,13 @@ export function initComposition (api) {
 
     try {
       const initScores = api.getListeTournoi().map(nom => [nom, 0])
+      // Invalider EN PREMIER (synchrone) pour bloquer tout timer d'autosave
+      // qui se déclencherait pendant les awaits IPC suivants.
+      try { if (typeof api.invalidateScoresParTable === 'function') api.invalidateScoresParTable() } catch (_e) {}
       await api.setScoresTournoi(initScores)
       try { await api.setScoresParTable([]) } catch (_e) {}
       try { api.clearAllValidatedMancheSnapshots() } catch (_e) {}
       try { localStorage.removeItem('scores_par_table') } catch (_e) {}
-      // Invalider tous les timers d'autosave en attente pour éviter qu'ils
-      // réécrivent d'anciens scores après la remise à zéro.
-      try { if (typeof api.invalidateScoresParTable === 'function') api.invalidateScoresParTable() } catch (_e) {}
     } catch (e) { console.warn('Failed to set initial scores from composition', e) }
 
     // In exclu mode, persist the exclu's seat position before building rotations

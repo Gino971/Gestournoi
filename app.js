@@ -39,10 +39,10 @@ import {
   setRecap,
   getExclusTournoi,
   setExclusTournoi
-} from './api.js?v=19'
+} from './api.js?v=22'
 
-import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=19'
-import { computeEligible } from './lucky-utils.js?v=19'
+import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=22'
+import { computeEligible } from './lucky-utils.js?v=22'
 import {
   tirageAuSort,
   transfertTotauxTable,
@@ -51,13 +51,13 @@ import {
   distributeAttackerScore,
   validateAttackerDivisibility,
   placeAttackerAtIndex
-} from './coreTournoi.js?v=19'
-import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=19'
-import { generateSerpentinTables } from './serpentin.js?v=19'
-import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=19'
-import { buildClassementFromRecap } from './lib/classement-utils.js?v=19'
-import { askConfirm, _showCustomDialog } from './lib/dialogs.js?v=19'
-import { initComposition } from './lib/composition.js?v=21'
+} from './coreTournoi.js?v=22'
+import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=22'
+import { generateSerpentinTables } from './serpentin.js?v=22'
+import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=22'
+import { buildClassementFromRecap } from './lib/classement-utils.js?v=22'
+import { askConfirm, _showCustomDialog } from './lib/dialogs.js?v=22'
+import { initComposition } from './lib/composition.js?v=22'
 
 // Version badge — populated at startup from DOM script/link src attributes
 const APP_VERSION = '19'
@@ -1153,7 +1153,7 @@ if (btnRestaurationNav) {
 const planHeadingEl = document.getElementById('plan-heading')
 
 // Minuteur
-import initTimer from './timer.js?v=19'
+import initTimer from './timer.js?v=22'
 try { initTimer() } catch (_e) { /* ignore if timer DOM not ready */ }
 
 
@@ -4431,6 +4431,8 @@ btnTirage.addEventListener('click', async () => {
 
     // Initialisation automatique (SANS CONFIRMATION)
     const initScores = listeTournoi.map(nom => [nom, 0]) // [Nom, Total=0]
+    // Invalider EN PREMIER (synchrone) pour bloquer tout timer d'autosave en cours.
+    invalidateScoresParTable()
     await setScoresTournoi(initScores)
 
     // Remise à zéro des scores par table et retour à la 1ère manche
