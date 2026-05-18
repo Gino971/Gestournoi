@@ -39,10 +39,10 @@ import {
   setRecap,
   getExclusTournoi,
   setExclusTournoi
-} from './api.js?v=27'
+} from './api.js?v=28'
 
-import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=27'
-import { computeEligible } from './lucky-utils.js?v=27'
+import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=28'
+import { computeEligible } from './lucky-utils.js?v=28'
 import {
   tirageAuSort,
   transfertTotauxTable,
@@ -51,16 +51,16 @@ import {
   distributeAttackerScore,
   validateAttackerDivisibility,
   placeAttackerAtIndex
-} from './coreTournoi.js?v=27'
-import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=27'
-import { generateSerpentinTables } from './serpentin.js?v=27'
-import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=27'
-import { buildClassementFromRecap } from './lib/classement-utils.js?v=27'
-import { askConfirm, _showCustomDialog } from './lib/dialogs.js?v=27'
-import { initComposition } from './lib/composition.js?v=27'
+} from './coreTournoi.js?v=28'
+import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=28'
+import { generateSerpentinTables } from './serpentin.js?v=28'
+import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=28'
+import { buildClassementFromRecap } from './lib/classement-utils.js?v=28'
+import { askConfirm, _showCustomDialog } from './lib/dialogs.js?v=28'
+import { initComposition } from './lib/composition.js?v=28'
 
 // Version badge — populated at startup from DOM script/link src attributes
-const APP_VERSION = '27'
+const APP_VERSION = '28'
 ;(function () {
   const badge = document.getElementById('version-badge')
   if (!badge) return
@@ -166,6 +166,46 @@ async function resetScoresForComposition () {
     try { if (typeof setFeuilleExcluInfo === 'function') setFeuilleExcluInfo(null, 0) } catch (_e) {}
   } catch (e) {
     console.warn('Failed to reset scores for composition', e)
+  }
+}
+
+function isMortEntry (value) {
+  const name = (value && typeof value === 'object') ? value.nom : value
+  return String(name || '').toUpperCase().startsWith('MORT')
+}
+
+async function purgeMortsBeforeRecomposition () {
+  let listChanged = false
+
+  try {
+    if (Array.isArray(listeTournoi)) {
+      const filtered = listeTournoi.filter(n => !isMortEntry(n))
+      if (filtered.length !== listeTournoi.length) {
+        listeTournoi = filtered
+        listChanged = true
+      }
+    }
+  } catch (_e) {}
+
+  try {
+    const persistedFull = JSON.parse(localStorage.getItem('tarot_full_tirage') || 'null')
+    if (Array.isArray(persistedFull) && persistedFull.some(isMortEntry)) {
+      localStorage.removeItem('tarot_full_tirage')
+      dernierFullTirage = null
+    }
+  } catch (_e) {}
+
+  try {
+    const persistedTirage = loadTirage()
+    if (Array.isArray(persistedTirage) && persistedTirage.some(isMortEntry)) {
+      saveTirage(persistedTirage.filter(p => !isMortEntry(p)))
+    }
+  } catch (_e) {}
+
+  if (listChanged) {
+    try { renderListeTournoi() } catch (_e) {}
+    try { await renderListeGenerale() } catch (_e) {}
+    try { await saveListeTournoiNow() } catch (_e) {}
   }
 }
 
@@ -1180,7 +1220,7 @@ if (btnRestaurationNav) {
 const planHeadingEl = document.getElementById('plan-heading')
 
 // Minuteur
-import initTimer from './timer.js?v=27'
+import initTimer from './timer.js?v=28'
 try { initTimer() } catch (_e) { /* ignore if timer DOM not ready */ }
 
 
@@ -2501,6 +2541,8 @@ if (btnManualCompositionJoueurs) btnManualCompositionJoueurs.addEventListener('c
   // - prompt user to add "Mort(s)" / use tables 5/6 / mode exclu / cancel
   // - apply the chosen mode before computing the composition preview
   try {
+    await purgeMortsBeforeRecomposition()
+
     // Remove any existing 'Mort' entries so composition starts from active players
     try {
       if (Array.isArray(listeTournoi)) {
