@@ -39,10 +39,10 @@ import {
   setRecap,
   getExclusTournoi,
   setExclusTournoi
-} from './api.js?v=26'
+} from './api.js?v=27'
 
-import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=26'
-import { computeEligible } from './lucky-utils.js?v=26'
+import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=27'
+import { computeEligible } from './lucky-utils.js?v=27'
 import {
   tirageAuSort,
   transfertTotauxTable,
@@ -51,16 +51,16 @@ import {
   distributeAttackerScore,
   validateAttackerDivisibility,
   placeAttackerAtIndex
-} from './coreTournoi.js?v=26'
-import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=26'
-import { generateSerpentinTables } from './serpentin.js?v=26'
-import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=26'
-import { buildClassementFromRecap } from './lib/classement-utils.js?v=26'
-import { askConfirm, _showCustomDialog } from './lib/dialogs.js?v=26'
-import { initComposition } from './lib/composition.js?v=26'
+} from './coreTournoi.js?v=27'
+import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=27'
+import { generateSerpentinTables } from './serpentin.js?v=27'
+import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=27'
+import { buildClassementFromRecap } from './lib/classement-utils.js?v=27'
+import { askConfirm, _showCustomDialog } from './lib/dialogs.js?v=27'
+import { initComposition } from './lib/composition.js?v=27'
 
 // Version badge — populated at startup from DOM script/link src attributes
-const APP_VERSION = '23'
+const APP_VERSION = '27'
 ;(function () {
   const badge = document.getElementById('version-badge')
   if (!badge) return
@@ -155,6 +155,7 @@ async function resetScoresForComposition () {
     try { clearAllValidatedMancheSnapshots() } catch (_e) {}
     try { localStorage.removeItem('scores_par_table') } catch (_e) {}
     // Aligner avec le tirage au sort: repartir d'un tirage vide
+    try { localStorage.removeItem('tarot_tirage') } catch (_e) {}
     try { if (typeof setDernierFullTirage === 'function') setDernierFullTirage(null) } catch (_e) {}
     try { localStorage.removeItem('tarot_full_tirage') } catch (_e) {}
     try { if (typeof saveTirage === 'function') await saveTirage([]) } catch (_e) {}
@@ -162,6 +163,7 @@ async function resetScoresForComposition () {
     try { dernierDictRotations = null } catch (_e) {}
     try { if (typeof clearExcluSeatIndex === 'function') clearExcluSeatIndex() } catch (_e) {}
     try { if (typeof setExclusTournoi === 'function') await setExclusTournoi([]) } catch (_e) {}
+    try { if (typeof setFeuilleExcluInfo === 'function') setFeuilleExcluInfo(null, 0) } catch (_e) {}
   } catch (e) {
     console.warn('Failed to reset scores for composition', e)
   }
@@ -1178,7 +1180,7 @@ if (btnRestaurationNav) {
 const planHeadingEl = document.getElementById('plan-heading')
 
 // Minuteur
-import initTimer from './timer.js?v=26'
+import initTimer from './timer.js?v=27'
 try { initTimer() } catch (_e) { /* ignore if timer DOM not ready */ }
 
 
