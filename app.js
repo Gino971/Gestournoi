@@ -2509,7 +2509,7 @@ if (btnManualCompositionJoueurs) btnManualCompositionJoueurs.addEventListener('c
           listeTournoi = listeTournoi.filter(n => !(n && String(n).toUpperCase().includes('MORT')))
           try { renderListeTournoi() } catch (_e) {}
           try { await renderListeGenerale() } catch (_e) {}
-          try { scheduleSaveListeTournoi() } catch (_e) {}
+          try { await saveListeTournoiNow() } catch (_e) {}
           try { setMode('normal') } catch (_e) {}
         }
       }

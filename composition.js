@@ -9,10 +9,24 @@ export function initComposition (api) {
 
   let compositionPreviewBackup = null
 
+  function isMortName (name) {
+    return String(name || '').toUpperCase().startsWith('MORT')
+  }
+
+  function shouldKeepMorts () {
+    try {
+      return typeof api.getMode === 'function' && api.getMode() === 'morts'
+    } catch (_e) {
+      return false
+    }
+  }
+
   async function openCompositionModal () {
     compositionPreviewBackup = null
     if (!compOverlay) return
+    const keepMorts = shouldKeepMorts()
     let avail = (api.getListeTournoi() || []).filter(n => n && String(n).trim() !== '')
+    if (!keepMorts) avail = avail.filter(n => !isMortName(n))
     let exclSet = new Set()
     try {
       const exclusArr = (await api.getExclusTournoi()) || []
@@ -25,7 +39,7 @@ export function initComposition (api) {
     if (compAvailableList) {
       const availForPlacement = avail.filter(n => {
         if (!n) return false
-        if (String(n).toUpperCase().startsWith('MORT')) return false
+        if (!keepMorts && isMortName(n)) return false
         if (typeof exclSet !== 'undefined' && exclSet.has(n)) return false
         return true
       })
@@ -217,21 +231,25 @@ export function initComposition (api) {
   async function syncCompositionToPlan () {
     try {
       if (!compArrangedList) return
+      const keepMorts = shouldKeepMorts()
       const arranged = Array.from(compArrangedList.querySelectorAll('.comp-item')).map(el => decodeURIComponent(el.dataset.nom || ''))
       // fetch excluded players first so they are not offered/added to the composition
       const exclusArr = await api.getExclusTournoi().catch(() => [])
       const exclSet = new Set((exclusArr || []).filter(Boolean))
       // Remove excluded players from remaining so fullOrder contains only placeable players
       let remaining = (api.getListeTournoi() || []).filter(n => n && !arranged.includes(n) && !exclSet.has(n))
-      const fullOrder = [...arranged, ...remaining]
+      if (!keepMorts) remaining = remaining.filter(n => !isMortName(n))
+      const arrangedFiltered = keepMorts ? arranged : arranged.filter(n => !isMortName(n))
+      const fullOrder = [...arrangedFiltered, ...remaining]
 
       const baseOrder = (Array.isArray(api.getDernierFullTirage()) && api.getDernierFullTirage().length)
         ? api.getDernierFullTirage().map(p => p.nom)
         : (api.getListeTournoi() || [])
+      const normalizedBaseOrder = keepMorts ? baseOrder : baseOrder.filter(n => !isMortName(n))
 
       let previewFullTirage = []
       const ordered = fullOrder.slice()
-      const mortNames = ordered.filter(n => String(n || '').toUpperCase().startsWith('MORT'))
+      const mortNames = ordered.filter(n => isMortName(n))
 
       if (exclSet && exclSet.size > 0) {
         // In exclu mode: include exclu at the end of previewFullTirage and set
@@ -252,8 +270,8 @@ export function initComposition (api) {
           previewFullTirage = placeMortsAndFill(ordered)
       } else {
         let ptr = 0
-        for (let i = 0; i < baseOrder.length; i++) {
-          const name = baseOrder[i]
+        for (let i = 0; i < normalizedBaseOrder.length; i++) {
+          const name = normalizedBaseOrder[i]
           const nm = fullOrder[ptr++] || name
           previewFullTirage.push({ nom: nm, numero: previewFullTirage.length + 1 })
         }
@@ -333,7 +351,9 @@ export function initComposition (api) {
   if (compCancelBtn) compCancelBtn.addEventListener('click', closeCompositionModal)
 
   if (compValidateBtn) compValidateBtn.addEventListener('click', async () => {
-    const arranged = Array.from(compArrangedList.querySelectorAll('.comp-item')).map(el => decodeURIComponent(el.dataset.nom || ''))
+    const keepMorts = shouldKeepMorts()
+    const arrangedRaw = Array.from(compArrangedList.querySelectorAll('.comp-item')).map(el => decodeURIComponent(el.dataset.nom || ''))
+    const arranged = keepMorts ? arrangedRaw : arrangedRaw.filter(n => !isMortName(n))
     if (!arranged.length) {
       api.showAlert('Aucune composition fournie — annulation')
       closeCompositionModal()
@@ -354,8 +374,10 @@ export function initComposition (api) {
     const exclusArr = await api.getExclusTournoi().catch(() => [])
     const exclSet = new Set((exclusArr || []).filter(Boolean))
     let remaining = (api.getListeTournoi() || []).filter(n => n && !arranged.includes(n) && !exclSet.has(n))
+    if (!keepMorts) remaining = remaining.filter(n => !isMortName(n))
     const fullOrder = [...arranged, ...remaining]
     const baseOrder = (Array.isArray(api.getDernierFullTirage()) && api.getDernierFullTirage().length) ? api.getDernierFullTirage().map(p => p.nom) : (api.getListeTournoi() || [])
+    const normalizedBaseOrder = keepMorts ? baseOrder : baseOrder.filter(n => !isMortName(n))
 
     const composed = [...fullOrder]
     const mortNamesFinal = composed.filter(n => String(n || '').toUpperCase().startsWith('MORT'))
@@ -373,8 +395,8 @@ export function initComposition (api) {
     } else {
       const finalOrder = []
       let ptr = 0
-      for (let i = 0; i < baseOrder.length; i++) {
-        const name = baseOrder[i]
+      for (let i = 0; i < normalizedBaseOrder.length; i++) {
+        const name = normalizedBaseOrder[i]
         if (exclSet.has(name)) finalOrder.push(name)
         else finalOrder.push(fullOrder[ptr++] || name)
       }
