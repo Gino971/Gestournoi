@@ -2544,10 +2544,10 @@ if (btnManualCompositionJoueurs) btnManualCompositionJoueurs.addEventListener('c
     console.warn('Error preparing composition for non-multiple-of-4:', e)
   }
 
-  // compute preview & rotations first so Plan header shows the composition movement immediately
-  try { await syncCompositionToPlan() } catch (_e) { /* ignore */ }
+  // Ouvrir d'abord le modal : il remet à zéro les listes/scores et vide l'état visuel
+  // avant de recalculer la prévisualisation. Évite les décalages liés à un ancien état.
+  await openCompositionModal()
   try { const planBtn = document.querySelector('nav button[data-screen="plan"]'); if (planBtn) planBtn.click() } catch (_e) {}
-  openCompositionModal()
 })
 
 // Plan screen composer button removed (composition is available via Joueurs/Tirage quick-access) // no-op

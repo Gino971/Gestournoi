@@ -26,6 +26,11 @@ export function initComposition (api) {
       try { await api.setScoresParTable([]) } catch (_e2) {}
       try { api.clearAllValidatedMancheSnapshots() } catch (_e2) {}
       try { localStorage.removeItem('scores_par_table') } catch (_e2) {}
+      // Aligner le comportement avec le tirage au sort: repartir d'un tirage persistant vide.
+      // Évite qu'un ancien full_tirage serve de base et décale les placements en composition.
+      try { if (typeof api.setDernierFullTirage === 'function') api.setDernierFullTirage(null) } catch (_e2) {}
+      try { localStorage.removeItem('tarot_full_tirage') } catch (_e2) {}
+      try { if (typeof api.saveTirage === 'function') await api.saveTirage([]) } catch (_e2) {}
       // Forcer un re-rendu immédiat de la Saisie avec les données vidées,
       // pour éviter toute race condition IPC où l'ancien rendu lirait le fichier avant la réinitialisation.
       try { if (typeof api.renderSaisie === 'function') await api.renderSaisie() } catch (_e) {}
