@@ -39,10 +39,10 @@ import {
   setRecap,
   getExclusTournoi,
   setExclusTournoi
-} from './api.js?v=24'
+} from './api.js?v=25'
 
-import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=24'
-import { computeEligible } from './lucky-utils.js?v=24'
+import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=25'
+import { computeEligible } from './lucky-utils.js?v=25'
 import {
   tirageAuSort,
   transfertTotauxTable,
@@ -51,16 +51,16 @@ import {
   distributeAttackerScore,
   validateAttackerDivisibility,
   placeAttackerAtIndex
-} from './coreTournoi.js?v=24'
-import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=24'
-import { generateSerpentinTables } from './serpentin.js?v=24'
-import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=24'
-import { buildClassementFromRecap } from './lib/classement-utils.js?v=24'
-import { askConfirm, _showCustomDialog } from './lib/dialogs.js?v=24'
-import { initComposition } from './lib/composition.js?v=24'
+} from './coreTournoi.js?v=25'
+import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=25'
+import { generateSerpentinTables } from './serpentin.js?v=25'
+import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=25'
+import { buildClassementFromRecap } from './lib/classement-utils.js?v=25'
+import { askConfirm, _showCustomDialog } from './lib/dialogs.js?v=25'
+import { initComposition } from './lib/composition.js?v=25'
 
 // Version badge — populated at startup from DOM script/link src attributes
-const APP_VERSION = '21'
+const APP_VERSION = '22'
 ;(function () {
   const badge = document.getElementById('version-badge')
   if (!badge) return
@@ -1153,7 +1153,7 @@ if (btnRestaurationNav) {
 const planHeadingEl = document.getElementById('plan-heading')
 
 // Minuteur
-import initTimer from './timer.js?v=24'
+import initTimer from './timer.js?v=25'
 try { initTimer() } catch (_e) { /* ignore if timer DOM not ready */ }
 
 
@@ -2559,6 +2559,15 @@ if (btnManualCompositionJoueurs) btnManualCompositionJoueurs.addEventListener('c
   } catch (e) {
     console.warn('Error preparing composition for non-multiple-of-4:', e)
   }
+
+  // Reset les scores IMMÉDIATEMENT avant d'ouvrir le modal en mode compo
+  try {
+    invalidateScoresParTable()
+    await setScoresTournoi([])
+    try { await setScoresParTable([]) } catch (_e2) {}
+    try { localStorage.removeItem('scores_par_table') } catch (_e2) {}
+    try { clearAllValidatedMancheSnapshots() } catch (_e2) {}
+  } catch (_e) { console.warn('Reset scores before composition failed', _e) }
 
   // Ouvrir d'abord le modal : il remet à zéro les listes/scores et vide l'état visuel
   // avant de recalculer la prévisualisation. Évite les décalages liés à un ancien état.

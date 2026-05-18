@@ -18,11 +18,12 @@ export function initComposition (api) {
     try {
       const exclusArr = (await api.getExclusTournoi()) || []
       exclSet = new Set((exclusArr || []).filter(Boolean))
-      const initScores = (api.getListeTournoi() || []).map(n => [n, 0])
+      // RESET RADICAL: partir d'une ardoise blanche, pas d'initScores pré-remplis
       // Invalider EN PREMIER (synchrone, avant tout await) : si un timer d'autosave
       // se déclenche PENDANT l'attente IPC de setScoresParTable, il sera déjà rejeté.
       try { if (typeof api.invalidateScoresParTable === 'function') api.invalidateScoresParTable() } catch (_e2) {}
-      await api.setScoresTournoi(initScores)
+      // Vider complètement les scores du tournoi
+      await api.setScoresTournoi([])
       try { await api.setScoresParTable([]) } catch (_e2) {}
       try { api.clearAllValidatedMancheSnapshots() } catch (_e2) {}
       try { localStorage.removeItem('scores_par_table') } catch (_e2) {}

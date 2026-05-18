@@ -1,6 +1,6 @@
 {
   "name": "gestion-tournoi-tarot",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Application de gestion de tournoi de Tarot",
   "type": "module",
   "main": "main.cjs",
