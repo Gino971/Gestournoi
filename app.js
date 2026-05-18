@@ -39,10 +39,10 @@ import {
   setRecap,
   getExclusTournoi,
   setExclusTournoi
-} from './api.js?v=25'
+} from './api.js?v=26'
 
-import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=25'
-import { computeEligible } from './lucky-utils.js?v=25'
+import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=26'
+import { computeEligible } from './lucky-utils.js?v=26'
 import {
   tirageAuSort,
   transfertTotauxTable,
@@ -51,16 +51,16 @@ import {
   distributeAttackerScore,
   validateAttackerDivisibility,
   placeAttackerAtIndex
-} from './coreTournoi.js?v=25'
-import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=25'
-import { generateSerpentinTables } from './serpentin.js?v=25'
-import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=25'
-import { buildClassementFromRecap } from './lib/classement-utils.js?v=25'
-import { askConfirm, _showCustomDialog } from './lib/dialogs.js?v=25'
-import { initComposition } from './lib/composition.js?v=25'
+} from './coreTournoi.js?v=26'
+import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=26'
+import { generateSerpentinTables } from './serpentin.js?v=26'
+import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=26'
+import { buildClassementFromRecap } from './lib/classement-utils.js?v=26'
+import { askConfirm, _showCustomDialog } from './lib/dialogs.js?v=26'
+import { initComposition } from './lib/composition.js?v=26'
 
 // Version badge — populated at startup from DOM script/link src attributes
-const APP_VERSION = '22'
+const APP_VERSION = '23'
 ;(function () {
   const badge = document.getElementById('version-badge')
   if (!badge) return
@@ -140,6 +140,31 @@ function loadValidatedMancheSnapshot (rotationName) {
 // Supprime toutes les snapshots validées (utilisé par certaines actions de reset)
 function clearAllValidatedMancheSnapshots () {
   try { localStorage.removeItem('validated_manches_data') } catch (_e) { /* ignore */ }
+}
+
+// Reset complet des scores et état associé pour le mode composition.
+// Le reset doit intervenir avant le choix du mode, comme pour le tirage au sort,
+// afin de vider l'ancien état sans écraser le nouveau choix de l'utilisateur.
+async function resetScoresForComposition () {
+  try {
+    // Invalider EN PREMIER (synchrone, avant tout await)
+    invalidateScoresParTable()
+    // Vider les scores du tournoi
+    await setScoresTournoi([])
+    try { await setScoresParTable([]) } catch (_e) {}
+    try { clearAllValidatedMancheSnapshots() } catch (_e) {}
+    try { localStorage.removeItem('scores_par_table') } catch (_e) {}
+    // Aligner avec le tirage au sort: repartir d'un tirage vide
+    try { if (typeof setDernierFullTirage === 'function') setDernierFullTirage(null) } catch (_e) {}
+    try { localStorage.removeItem('tarot_full_tirage') } catch (_e) {}
+    try { if (typeof saveTirage === 'function') await saveTirage([]) } catch (_e) {}
+    // Nettoyer l'état des rotations anciennes pour éviter qu'une compo précédente pollue le plan
+    try { dernierDictRotations = null } catch (_e) {}
+    try { if (typeof clearExcluSeatIndex === 'function') clearExcluSeatIndex() } catch (_e) {}
+    try { if (typeof setExclusTournoi === 'function') await setExclusTournoi([]) } catch (_e) {}
+  } catch (e) {
+    console.warn('Failed to reset scores for composition', e)
+  }
 }
 
 // Helper Choix multiples
@@ -1153,7 +1178,7 @@ if (btnRestaurationNav) {
 const planHeadingEl = document.getElementById('plan-heading')
 
 // Minuteur
-import initTimer from './timer.js?v=25'
+import initTimer from './timer.js?v=26'
 try { initTimer() } catch (_e) { /* ignore if timer DOM not ready */ }
 
 
@@ -2458,7 +2483,8 @@ const { openCompositionModal: _openCompositionModal, closeCompositionModal: _clo
   renderSaisie,
   invalidateScoresParTable,
   updateLuckyButtonState,
-  applyExclusToRotations
+  applyExclusToRotations,
+  resetScoresForComposition
 })
 
 // Expose names used elsewhere in file
@@ -2482,9 +2508,14 @@ if (btnManualCompositionJoueurs) btnManualCompositionJoueurs.addEventListener('c
           try { renderListeTournoi() } catch (_e) {}
           try { await renderListeGenerale() } catch (_e) {}
           try { scheduleSaveListeTournoi() } catch (_e) {}
+          try { setMode('normal') } catch (_e) {}
         }
       }
     } catch (_e) {}
+
+    await resetScoresForComposition()
+    try { setMode('normal') } catch (_e) {}
+
     const reste = (Array.isArray(listeTournoi) ? listeTournoi.length : 0) % 4
     if (reste !== 0 && Array.isArray(listeTournoi) && listeTournoi.length >= 5) {
       let aAjouter = 4 - reste
@@ -2560,17 +2591,6 @@ if (btnManualCompositionJoueurs) btnManualCompositionJoueurs.addEventListener('c
     console.warn('Error preparing composition for non-multiple-of-4:', e)
   }
 
-  // Reset les scores IMMÉDIATEMENT avant d'ouvrir le modal en mode compo
-  try {
-    invalidateScoresParTable()
-    await setScoresTournoi([])
-    try { await setScoresParTable([]) } catch (_e2) {}
-    try { localStorage.removeItem('scores_par_table') } catch (_e2) {}
-    try { clearAllValidatedMancheSnapshots() } catch (_e2) {}
-  } catch (_e) { console.warn('Reset scores before composition failed', _e) }
-
-  // Ouvrir d'abord le modal : il remet à zéro les listes/scores et vide l'état visuel
-  // avant de recalculer la prévisualisation. Évite les décalages liés à un ancien état.
   await openCompositionModal()
   try { const planBtn = document.querySelector('nav button[data-screen="plan"]'); if (planBtn) planBtn.click() } catch (_e) {}
 })
@@ -2580,7 +2600,6 @@ if (btnManualCompositionJoueurs) btnManualCompositionJoueurs.addEventListener('c
 // Delegated fallback: open modal when either button is clicked even if earlier listeners failed
 // Ensure preview/heading updated when this fallback is used.
 // Composition events are handled inside the composition module.
-
 
 function renderListeTournoi () {
   // On s'assure que les morts sont à la fin avant d'afficher

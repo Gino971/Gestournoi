@@ -2,6 +2,9 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
+// Désactiver l'accélération GPU — évite les glitches de compositing sur macOS (Electron 40+)
+app.disableHardwareAcceleration()
+
 function createWindow () {
   const win = new BrowserWindow({
     width: 1200,
@@ -221,7 +224,15 @@ app.whenReady().then(async () => {
   // Vider le cache Electron pour garantir le chargement des fichiers à jour
   const ses = require('electron').session.defaultSession
   await ses.clearCache()
-  await ses.clearStorageData({ storages: ['cachestorage', 'shadercache', 'serviceworkers'] })
+  await ses.clearStorageData({ storages: ['cachestorage', 'shadercache', 'serviceworkers', 'indexdb'] })
+  // Vider aussi le Code Cache V8 (bytecode compilé) pour forcer le rechargement du JS modifié
+  try {
+    const codeCachePath = path.join(app.getPath('userData'), 'Code Cache')
+    if (fs.existsSync(codeCachePath)) {
+      fs.rmSync(codeCachePath, { recursive: true, force: true })
+      console.info('[Cache] Code Cache V8 vidé au démarrage')
+    }
+  } catch (e) { console.warn('[Cache] Impossible de vider le Code Cache', e) }
   console.info('[Cache] Cache Electron vidé au démarrage')
 
   migrateData() // Lancer la migration au démarrage

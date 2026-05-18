@@ -10,34 +10,14 @@ export function initComposition (api) {
   let compositionPreviewBackup = null
 
   async function openCompositionModal () {
+    compositionPreviewBackup = null
     if (!compOverlay) return
     let avail = (api.getListeTournoi() || []).filter(n => n && String(n).trim() !== '')
-    // Toujours charger les exclus et réinitialiser les scores au lancement
-    // de la composition, quel que soit le mode.
     let exclSet = new Set()
     try {
       const exclusArr = (await api.getExclusTournoi()) || []
       exclSet = new Set((exclusArr || []).filter(Boolean))
-      // RESET RADICAL: partir d'une ardoise blanche, pas d'initScores pré-remplis
-      // Invalider EN PREMIER (synchrone, avant tout await) : si un timer d'autosave
-      // se déclenche PENDANT l'attente IPC de setScoresParTable, il sera déjà rejeté.
-      try { if (typeof api.invalidateScoresParTable === 'function') api.invalidateScoresParTable() } catch (_e2) {}
-      // Vider complètement les scores du tournoi
-      await api.setScoresTournoi([])
-      try { await api.setScoresParTable([]) } catch (_e2) {}
-      try { api.clearAllValidatedMancheSnapshots() } catch (_e2) {}
-      try { localStorage.removeItem('scores_par_table') } catch (_e2) {}
-      // Aligner le comportement avec le tirage au sort: repartir d'un tirage persistant vide.
-      // Évite qu'un ancien full_tirage serve de base et décale les placements en composition.
-      try { if (typeof api.setDernierFullTirage === 'function') api.setDernierFullTirage(null) } catch (_e2) {}
-      try { localStorage.removeItem('tarot_full_tirage') } catch (_e2) {}
-      try { if (typeof api.saveTirage === 'function') await api.saveTirage([]) } catch (_e2) {}
-      // Forcer un re-rendu immédiat de la Saisie avec les données vidées,
-      // pour éviter toute race condition IPC où l'ancien rendu lirait le fichier avant la réinitialisation.
       try { if (typeof api.renderSaisie === 'function') await api.renderSaisie() } catch (_e) {}
-      // renderFeuilleSoiree pour zéroer la Saisie avant que l'utilisateur ne la voie.
-      // updateRotationsDisplay() est intentionnellement omis ici : si dernierDictRotations
-      // est null et listeTournoi.length % 4 === 0, il effacerait les exclus.
       try { if (typeof api.renderFeuilleSoiree === 'function') await api.renderFeuilleSoiree() } catch (_e) {}
     } catch (_e) {
       console.warn('composition: failed to reset on open', _e)
