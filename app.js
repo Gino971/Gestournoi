@@ -39,10 +39,10 @@ import {
   setRecap,
   getExclusTournoi,
   setExclusTournoi
-} from './api.js?v=22'
+} from './api.js?v=23'
 
-import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=22'
-import { computeEligible } from './lucky-utils.js?v=22'
+import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=23'
+import { computeEligible } from './lucky-utils.js?v=23'
 import {
   tirageAuSort,
   transfertTotauxTable,
@@ -51,16 +51,16 @@ import {
   distributeAttackerScore,
   validateAttackerDivisibility,
   placeAttackerAtIndex
-} from './coreTournoi.js?v=22'
-import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=22'
-import { generateSerpentinTables } from './serpentin.js?v=22'
-import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=22'
-import { buildClassementFromRecap } from './lib/classement-utils.js?v=22'
-import { askConfirm, _showCustomDialog } from './lib/dialogs.js?v=22'
-import { initComposition } from './lib/composition.js?v=22'
+} from './coreTournoi.js?v=23'
+import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=23'
+import { generateSerpentinTables } from './serpentin.js?v=23'
+import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=23'
+import { buildClassementFromRecap } from './lib/classement-utils.js?v=23'
+import { askConfirm, _showCustomDialog } from './lib/dialogs.js?v=23'
+import { initComposition } from './lib/composition.js?v=23'
 
 // Version badge — populated at startup from DOM script/link src attributes
-const APP_VERSION = '19'
+const APP_VERSION = '20'
 ;(function () {
   const badge = document.getElementById('version-badge')
   if (!badge) return
@@ -1153,7 +1153,7 @@ if (btnRestaurationNav) {
 const planHeadingEl = document.getElementById('plan-heading')
 
 // Minuteur
-import initTimer from './timer.js?v=22'
+import initTimer from './timer.js?v=23'
 try { initTimer() } catch (_e) { /* ignore if timer DOM not ready */ }
 
 
