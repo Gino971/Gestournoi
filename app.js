@@ -39,10 +39,10 @@ import {
   setRecap,
   getExclusTournoi,
   setExclusTournoi
-} from './api.js?v=29'
+} from './api.js?v=30'
 
-import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=29'
-import { computeEligible } from './lucky-utils.js?v=29'
+import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=30'
+import { computeEligible } from './lucky-utils.js?v=30'
 import {
   tirageAuSort,
   transfertTotauxTable,
@@ -51,16 +51,16 @@ import {
   distributeAttackerScore,
   validateAttackerDivisibility,
   placeAttackerAtIndex
-} from './coreTournoi.js?v=29'
-import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=29'
-import { generateSerpentinTables } from './serpentin.js?v=29'
-import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=29'
-import { buildClassementFromRecap } from './lib/classement-utils.js?v=29'
-import { askConfirm, askTextInput, _showCustomDialog } from './lib/dialogs.js?v=29'
-import { initComposition } from './lib/composition.js?v=29'
+} from './coreTournoi.js?v=30'
+import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=30'
+import { generateSerpentinTables } from './serpentin.js?v=30'
+import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=30'
+import { buildClassementFromRecap } from './lib/classement-utils.js?v=30'
+import * as dialogsApi from './lib/dialogs.js?v=30'
+import { initComposition } from './lib/composition.js?v=30'
 
 // Version badge
-const APP_VERSION = '29'
+const APP_VERSION = '30'
 ;(function () {
   const badge = document.getElementById('version-badge')
   if (!badge) return
@@ -68,6 +68,69 @@ const APP_VERSION = '29'
   badge.style.pointerEvents = 'auto'
   badge.style.cursor = 'default'
 })()
+
+const askConfirm = dialogsApi.askConfirm
+const _showCustomDialog = dialogsApi._showCustomDialog
+const askTextInput = (typeof dialogsApi.askTextInput === 'function')
+  ? dialogsApi.askTextInput
+  : async function fallbackAskTextInput (message, initialValue = '', options = {}) {
+      return new Promise((resolve) => {
+        try {
+          const overlay = document.getElementById('custom-dialog-overlay')
+          const msgEl = document.getElementById('custom-dialog-message')
+          const btnContainer = document.getElementById('custom-dialog-buttons')
+          if (!overlay || !msgEl || !btnContainer) {
+            resolve(null)
+            return
+          }
+
+          const input = document.createElement('input')
+          input.type = options.type || 'text'
+          input.value = initialValue || ''
+          input.placeholder = options.placeholder || ''
+          input.className = 'custom-dialog-input'
+
+          const cancelBtn = document.createElement('button')
+          cancelBtn.textContent = options.cancelLabel || 'Annuler'
+          cancelBtn.className = 'custom-dialog-btn-secondary'
+
+          const confirmBtn = document.createElement('button')
+          confirmBtn.textContent = options.confirmLabel || 'Valider'
+          confirmBtn.className = 'custom-dialog-btn-primary'
+
+          msgEl.textContent = message
+          msgEl.appendChild(input)
+          btnContainer.innerHTML = ''
+          btnContainer.className = 'custom-dialog-buttons'
+          btnContainer.appendChild(cancelBtn)
+          btnContainer.appendChild(confirmBtn)
+
+          overlay.classList.remove('hidden')
+
+          const onKey = (e) => {
+            if (e.key === 'Escape') close(null)
+            if (e.key === 'Enter') close(input.value)
+          }
+
+          const close = (value) => {
+            document.removeEventListener('keydown', onKey)
+            overlay.classList.add('hidden')
+            resolve(value)
+          }
+
+          cancelBtn.addEventListener('click', () => close(null))
+          confirmBtn.addEventListener('click', () => close(input.value))
+          document.addEventListener('keydown', onKey)
+
+          requestAnimationFrame(() => {
+            input.focus()
+            input.select()
+          })
+        } catch (_e) {
+          resolve(null)
+        }
+      })
+    }
 
 // Local confirmation (thumb) used by frontend flows. Kept minimal and resilient
 // so it works even when a global `showConfirmation` isn't present.
