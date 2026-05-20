@@ -2867,7 +2867,12 @@ async function renderListeGenerale () {
         (nom) => `
           <div class="joueur-general-row">
             <button type="button" class="btn-trash btn-trash-general" data-nom="${nom}" title="Retirer ce joueur de la liste générale">🗑︎</button>
-            <button type="button" class="btn-edit-general" data-nom="${nom}" title="Modifier ce joueur">✎</button>
+            <button type="button" class="btn-edit-general" data-nom="${nom}" title="Modifier ce joueur" aria-label="Modifier ${nom}">
+              <svg viewBox="0 0 24 24" aria-hidden="true" width="15" height="15">
+                <path d="M4 20h4l10-10-4-4L4 16v4z"></path>
+                <path d="M13 7l4 4"></path>
+              </svg>
+            </button>
             <div class="joueur-item ${listeTournoi.includes(nom) ? 'selected' : ''}" data-nom="${nom}">${nom}</div>
           </div>
         `

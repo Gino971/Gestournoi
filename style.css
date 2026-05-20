@@ -504,19 +504,25 @@ nav button svg,
 
 /* Corbeilles petites (joueurs + dates) */
 .btn-trash,
+.btn-edit-general,
 .btn-del-manche,
 .btn-del-date {
+  -webkit-appearance: none;
+  appearance: none;
   border: none;
-  background: transparent;
+  background: transparent !important;
   cursor: pointer;
   font-size: 0.7rem;
   color: #bdbdbd; /* neutral for row-level trash icons */
   width: 18px;
   height: 18px;
   padding: 0;
+  margin: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  border-radius: 0;
+  box-shadow: none;
   -webkit-filter: none; /* do not attempt recolor for row icons */
   filter: none;
 }
@@ -527,7 +533,21 @@ nav button svg,
   opacity: 0.7;
 }
 
+.btn-edit-general {
+  color: #7dd3fc;
+}
+
+.btn-edit-general svg {
+  display: block;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .btn-trash:hover,
+.btn-edit-general:hover,
 .btn-del-date:hover,
 .btn-del-manche:hover {
   color: #ffffff;
@@ -814,7 +834,7 @@ th, td {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  width: 150px;
+  width: 175px;
 }
 
 .joueur-item {
@@ -1781,6 +1801,23 @@ tbody.lucky-active tr.lucky-highlight { transform: translateZ(0) scale(1.08); bo
   word-break: break-word;
 }
 
+.custom-dialog-input {
+  width: 100%;
+  margin-top: 0.9rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: #e6eef6;
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
+.custom-dialog-input:focus {
+  outline: 2px solid rgba(59,130,246,0.55);
+  border-color: rgba(96,165,250,0.7);
+}
+
 .custom-dialog-buttons {
   display: flex;
   flex-wrap: wrap;
@@ -2041,29 +2078,6 @@ tr.is-mort input.manual-manche-input.input-mort-disabled::placeholder {
 #nb-parties,
 #nb-parties-par-manche { width: 2.2rem; text-align: center } /* kept for legacy but spacing tightened above */
 
-/* ===== DEBUG PANEL (temporary) ===== */
-#debug-panel {
-  position: fixed;
-  right: 12px;
-  bottom: 12px;
-  background: rgba(2,6,23,0.78);
-  color: #e6eef6;
-  padding: 8px 10px;
-  border-radius: 8px;
-  font-size: 12px;
-  line-height: 1.2;
-  max-width: 380px;
-  max-height: 220px;
-  overflow: auto;
-  z-index: 99999;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
-  border: 1px solid rgba(255,255,255,0.02);
-}
-#debug-panel .debug-line { margin-bottom: 6px; opacity: 0.95 }
-#debug-panel .debug-info { color: #bde0ff }
-#debug-panel .debug-warn { color: #ffd88a }
-#debug-panel .debug-err { color: #ffb3b3 }
-
 /* Validation bubble (score non-divisible) */
 .validation-bubble {
   position: fixed;
@@ -2106,8 +2120,6 @@ tr.is-mort input.manual-manche-input.input-mort-disabled::placeholder {
   0% { opacity: 1; transform: scale(1); }
   100% { opacity: 0; transform: scale(0.85) translateY(4px); }
 }
-#debug-panel::-webkit-scrollbar { height: 6px; width: 6px }
-#debug-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.04); border-radius: 6px }
 
 /* ── Minuteur ── */
 .timer-container {
