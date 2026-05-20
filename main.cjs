@@ -129,7 +129,6 @@ function migrateData () {
           if (cand && fs.existsSync(cand)) {
             const raw = fs.readFileSync(cand, 'utf8')
             fs.writeFileSync(redisUserPath, raw, 'utf8')
-            console.info('Migrated redistributions.json to DATA_DIR from', cand)
             break
           }
         } catch (e) { /* ignore candidate failures */ }
@@ -230,10 +229,8 @@ app.whenReady().then(async () => {
     const codeCachePath = path.join(app.getPath('userData'), 'Code Cache')
     if (fs.existsSync(codeCachePath)) {
       fs.rmSync(codeCachePath, { recursive: true, force: true })
-      console.info('[Cache] Code Cache V8 vidé au démarrage')
     }
-  } catch (e) { console.warn('[Cache] Impossible de vider le Code Cache', e) }
-  console.info('[Cache] Cache Electron vidé au démarrage')
+  } catch (_e) {}
 
   migrateData() // Lancer la migration au démarrage
 
@@ -265,7 +262,6 @@ app.whenReady().then(async () => {
                 try {
                   const raw = fs.readFileSync(p, 'utf8')
                   const parsed = JSON.parse(raw)
-                  console.info('Loaded redistributions.json from', p)
                   return parsed
                 } catch (e) {
                   console.error('Erreur parse redistributions.json at', p, e)
@@ -278,7 +274,6 @@ app.whenReady().then(async () => {
         } catch (e) {
           console.error('Erreur lecture defaults redistributions', e)
         }
-        console.warn('redistributions.json not found in any candidate; returning empty {}')
         return {}
       }
       case 'scores_par_table': {

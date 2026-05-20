@@ -21,6 +21,10 @@ export function getMovementInfo (nbTables) {
   if (nbTables === 3) label = 'Mouvement Howell FFT – 3 tables'
   if (nbTables === 4) label = 'Mouvement Howell FFT – 4 tables'
 
+  if (nbTables === 3 || nbTables === 4) {
+    return { label, comment: '', maxManches: null }
+  }
+
   // Base movements and exceptions per your rules
   const baseMap = {
     6: { base: 'N fixe, S +1, E +2, O -1', maxManches: 5 },
@@ -57,8 +61,7 @@ export function getMovementInfo (nbTables) {
   if (exceptions) {
     const exStrings = Object.keys(exceptions).map(k => `Manche ${k}: ${exceptions[k]}`)
     comment += ' — Exceptions: ' + exStrings.join('; ')
-    // Marquer comme spécial si des exceptions sont présentes
-    label = 'Mouvement spécial FFT'
+    label = `Mouvement spécial FFT ! ${nbTables} tables`
   }
 
   return { label, comment, maxManches }
