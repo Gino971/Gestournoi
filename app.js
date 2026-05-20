@@ -39,10 +39,10 @@ import {
   setRecap,
   getExclusTournoi,
   setExclusTournoi
-} from './api.js?v=28'
+} from './api.js?v=29'
 
-import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=28'
-import { computeEligible } from './lucky-utils.js?v=28'
+import { getPlacesFromDefaults, countActivePlayersFromNames } from './redistrib-helper.js?v=29'
+import { computeEligible } from './lucky-utils.js?v=29'
 import {
   tirageAuSort,
   transfertTotauxTable,
@@ -51,31 +51,20 @@ import {
   distributeAttackerScore,
   validateAttackerDivisibility,
   placeAttackerAtIndex
-} from './coreTournoi.js?v=28'
-import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=28'
-import { generateSerpentinTables } from './serpentin.js?v=28'
-import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=28'
-import { buildClassementFromRecap } from './lib/classement-utils.js?v=28'
-import { askConfirm, askTextInput, _showCustomDialog } from './lib/dialogs.js?v=28'
-import { initComposition } from './lib/composition.js?v=28'
+} from './coreTournoi.js?v=29'
+import { calculRotationsRainbow, computeActiveFromBase, getMovementInfo } from './rotations.js?v=29'
+import { generateSerpentinTables } from './serpentin.js?v=29'
+import { applyFeuilleToScoresSoiree, applyValidatedManche, mergeRotationWithStoredTables } from './lib/saisie-simple.js?v=29'
+import { buildClassementFromRecap } from './lib/classement-utils.js?v=29'
+import { askConfirm, askTextInput, _showCustomDialog } from './lib/dialogs.js?v=29'
+import { initComposition } from './lib/composition.js?v=29'
 
-// Version badge — populated at startup from DOM script/link src attributes
-const APP_VERSION = '28'
+// Version badge
+const APP_VERSION = '29'
 ;(function () {
   const badge = document.getElementById('version-badge')
   if (!badge) return
-  const entries = [
-    ...document.querySelectorAll('link[rel="stylesheet"][href]'),
-    ...document.querySelectorAll('script[src]')
-  ]
-    .map(el => {
-      const url = el.getAttribute('href') || el.getAttribute('src') || ''
-      const m = url.match(/([^/?]+\.(?:js|css))(?:\?v=(\d+))?/)
-      if (!m) return null
-      return m[2] ? `${m[1]} v${m[2]}` : m[1]
-    })
-    .filter(Boolean)
-  badge.textContent = entries.length ? entries.join('\n') : `v${APP_VERSION}`
+  badge.textContent = `v${APP_VERSION}`
   badge.style.pointerEvents = 'auto'
   badge.style.cursor = 'default'
 })()
