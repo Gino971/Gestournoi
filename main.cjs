@@ -22,7 +22,7 @@ function createWindow () {
     callback({ requestHeaders: details.requestHeaders })
   })
 
-  win.loadFile('index.html')
+  win.loadFile(path.join(__dirname, 'frontend', 'index.html'))
 
   // Afficher la fenêtre uniquement quand le rendu est prêt
   win.once('ready-to-show', () => {
