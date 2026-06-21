@@ -1,20 +1,22 @@
-# Dépendances
-frontend/node_modules/
+# macOS
+.DS_Store
 
 # Python
-backend/__pycache__/
-*.pyc
+__pycache__/
+*.py[cod]
 
-# Données locales (ne pas versionner les données de tournoi)
-backend/data/*.csv
-backend/data/*.json
-backend/data/backups/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Electron build output
+# Node / Electron
+node_modules/
+frontend/node_modules/
 frontend/dist/
-frontend/out/
-dist/
+frontend/release/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Env
+.env
+.env.*

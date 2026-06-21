@@ -8,8 +8,8 @@
 body {
   margin: 0;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #121212;
-  color: #f5f5f5;
+  background: #070d1a;
+  color: #e2e8f0;
 }
 
 h1, h2, h3 {
@@ -111,10 +111,10 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
 }
 
 .choice-vertical-dialog {
-  background: #0f1720;
-  border: 1px solid #2f3b43;
+  background: #0a1225;
+  border: 1px solid #1f3a5a;
   padding: 0.75rem;
-  border-radius: 8px;
+  border-radius: 10px;
   width: min(540px, 90%);
   max-height: 80vh;
   display: flex;
@@ -138,9 +138,9 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
 
 .choice-vertical-item {
   text-align: left;
-  background: #1e272e;
-  color: #f5f5f5;
-  border: 1px solid #37474f;
+  background: #111e33;
+  color: #e2e8f0;
+  border: 1px solid #1f3a5a;
   padding: 0.5rem;
   border-radius: 6px;
   cursor: pointer;
@@ -148,7 +148,7 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
 }
 
 .choice-vertical-item:hover {
-  background: #2a3a44;
+  background: #162540;
 }
 
 .choice-vertical-actions {
@@ -163,15 +163,16 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
    NAVIGATION (HEADER)
    ========================================================================== */
 header {
-  background: #1f2933;
-  color: #f5f5f5;
+  background: #0d1526;
+  color: #e2e8f0;
   padding: 0.35rem 0.5rem;
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   z-index: 1000;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.6), 0 1px 0 rgba(14,165,233,0.15);
+  /* will-change: transform supprimé — causait des glitches GPU/clignotement de la barre de menu sur macOS/Electron */
 }
 
 header h1 {
@@ -187,28 +188,31 @@ nav {
 
 nav button {
   border: none;
-  background: #2f3f49;
-  color: #dfeff6;
-  padding: 0.4rem 0.55rem;
-  border-radius: 6px;
+  background: #111e33;
+  color: #cbd5e1;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 1.35rem;
+  font-size: 1rem;
   line-height: 1;
-  transition: background 180ms ease, transform 120ms ease, box-shadow 180ms ease, opacity 120ms ease;
+  transition: background 180ms ease, box-shadow 180ms ease;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.18rem;
 }
 
 nav button:hover {
-  background: #3e566b;
+  background: #1d3050;
 }
 
 /* Active nav button: stronger visual emphasis */
 nav button.active, .btn-nav-action.active {
-  background: linear-gradient(180deg, #1e88e5, #1976d2); /* brighter blue */
+  background: linear-gradient(180deg, #0ea5e9, #0284c7);
   color: #ffffff;
   font-weight: 600;
-  transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
-  border-bottom: 3px solid #ffb300; /* yellow accent to match totals */
+  box-shadow: 0 6px 18px rgba(14,165,233,0.3);
+  border-bottom: 3px solid #06b6d4;
 }
 
 /* Locked / disabled nav buttons */
@@ -221,16 +225,16 @@ nav button.locked, .btn-nav-action.locked, nav button[disabled] {
 
 /* Boutons d'action (Joueurs, Saisie) */
 .btn-nav-action {
-  background: #3d5767; /* slightly brighter than base */
-  border: 1px solid #5a7385;
+  background: #0f1e36;
+  border: 1px solid #1f3a5a;
 }
 .btn-nav-action:hover {
-  background: #4e6d82;
+  background: #1d3050;
 }
 
 /* Subtle accessibility: focus outline for keyboard navigation */
 nav button:focus {
-  outline: 2px solid rgba(129, 212, 250, 0.25);
+  outline: 2px solid rgba(14, 165, 233, 0.3);
   outline-offset: 2px;
 }
 
@@ -255,11 +259,11 @@ nav button:focus {
 
 /* Bouton Plein écran */
 #btn-quitter {
-  background-color: #2f3f49;
+  background-color: #111e33;
 }
 
 #btn-quitter:hover {
-  background-color: #3e566b;
+  background-color: #1d3050;
 }
 
 
@@ -271,17 +275,17 @@ button {
 }
 
 .btn-primary {
-  background: #1976d2;
+  background: #0284c7;
   color: #fff;
   border: none;
   padding: 0.4rem 0.7rem;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
   font-size: 0.9rem;
 }
 
 .btn-primary:hover {
-  background: #1e88e5;
+  background: #0ea5e9;
 }
 
 /* Bouton suppression standardisé sur toutes les pages */
@@ -305,19 +309,19 @@ button {
 #container-saisie { display: block !important; }
 
 /* Ensure per-table saisie inputs are visible in dark mode */
-#container-saisie table input[type=number] {
-  background: #111;
-  color: #fff; /* readable on dark backgrounds */
-  border: 1px solid rgba(255,255,255,0.08);
+#container-saisie table input[type=text] {
+  background: #0a1628;
+  color: #e2e8f0;
+  border: 1px solid rgba(14,165,233,0.15);
   padding: 1px;
   border-radius: 4px;
-  width: 60px; /* reduced per user request */
+  width: 60px;
   box-sizing: border-box;
   outline: none;
 }
-#container-saisie table input[type=number]:focus {
-  box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
-  border-color: rgba(59,130,246,0.7);
+#container-saisie table input[type=text]:focus {
+  box-shadow: 0 0 0 3px rgba(14,165,233,0.15);
+  border-color: rgba(14,165,233,0.7);
 }
 #container-saisie table td { vertical-align: middle; }
 
@@ -337,13 +341,12 @@ button {
   vertical-align: top;
   margin: 0.4rem; /* spacing between cards */
   padding: 0.37rem; /* inner breathing room */
-  border-radius: 8px;
-  background: rgba(241, 37, 54, 0.95);
-  /* stronger visible contour */
-  border: 4px solid rgba(44, 246, 17, 0.18);
+  border-radius: 10px;
+  background: #111e33;
+  border: 1px solid rgba(14, 165, 233, 0.2);
   }
 .saisie-card td.input-cell > input,
-#container-saisie table input[type=number].saisie-input {
+#container-saisie table input[type=text].saisie-input {
   width: 60px;
   padding: 1px;
   box-sizing: border-box;
@@ -365,12 +368,23 @@ button {
 }
 /* Inline SVGs are used for trash icons now; remove emoji pseudo-element */
 
-/* Ensure SVG icons inside nav buttons match emoji sizing */
+/* SVG icons inside nav buttons */
+nav button svg,
 .btn-nav-action svg {
-  width: 1.25em;
-  height: 1.25em;
-  vertical-align: middle;
-  display: inline-block;
+  width: 1.35rem;
+  height: 1.35rem;
+  flex-shrink: 0;
+}
+
+/* Label texte sous l'icône */
+.nav-label {
+  font-size: 0.56rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 /* No plan-specific sizing — use default nav button sizing and SVG rules */
@@ -393,9 +407,6 @@ button {
   color: #ff5252;
   font-size: 1rem;
   gap: 0;
-  /* Try to recolor platform emoji by applying a CSS filter (best‑effort) */
-  -webkit-filter: sepia(1) saturate(8000%) hue-rotate(-10deg) brightness(0.95);
-  filter: sepia(1) saturate(8000%) hue-rotate(-10deg) brightness(0.95);
 }
 .btn-delete-action.btn-icon::before { font-size: 1.2rem; }
 
@@ -454,17 +465,17 @@ button {
 }
 
 .btn-secondary {
-  background: #263238;
-  color: #f5f5f5;
-  border: 1px solid #455a64;
+  background: #0d1f35;
+  color: #e2e8f0;
+  border: 1px solid #1f3a5a;
   padding: 0.3rem 0.6rem;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
   font-size: 0.85rem;
 }
 
 .btn-secondary:hover {
-  background: #37474f;
+  background: #162540;
 }
 
 /* Visual acknowledgement classes for the lucky-draw button (temporary, subtle) */
@@ -493,19 +504,25 @@ button {
 
 /* Corbeilles petites (joueurs + dates) */
 .btn-trash,
+.btn-edit-general,
 .btn-del-manche,
 .btn-del-date {
+  -webkit-appearance: none;
+  appearance: none;
   border: none;
-  background: transparent;
+  background: transparent !important;
   cursor: pointer;
   font-size: 0.7rem;
   color: #bdbdbd; /* neutral for row-level trash icons */
   width: 18px;
   height: 18px;
   padding: 0;
+  margin: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  border-radius: 0;
+  box-shadow: none;
   -webkit-filter: none; /* do not attempt recolor for row icons */
   filter: none;
 }
@@ -516,7 +533,21 @@ button {
   opacity: 0.7;
 }
 
+.btn-edit-general {
+  color: #7dd3fc;
+}
+
+.btn-edit-general svg {
+  display: block;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .btn-trash:hover,
+.btn-edit-general:hover,
 .btn-del-date:hover,
 .btn-del-manche:hover {
   color: #ffffff;
@@ -531,9 +562,7 @@ button {
 #btn-effacer-cognin.btn-delete-action.btn-icon,
 .btn-del-recap,
 .btn-delete-backup {
-  color: #ff5252;
-  -webkit-filter: sepia(1) saturate(8000%) hue-rotate(-10deg) brightness(0.95);
-  filter: sepia(1) saturate(8000%) hue-rotate(-10deg) brightness(0.95);
+  color: #ef4444;
 }
 
 /* Hover for header delete icons (red ones) */
@@ -544,12 +573,12 @@ button {
 
 /* 5-player dealer input styling */
 input.dealer-input {
-  background-color: #444; /* slightly lighter than normal cells */
-  color: #ccc;
+  background-color: #162540;
+  color: #94a3b8;
 }
 
 td.dealer-cell {
-  background-color: #2a2a2a;
+  background-color: #0d1526;
 }
 #btn-effacer-cognin.btn-delete-action.btn-icon:hover,
 .btn-del-recap:hover,
@@ -566,10 +595,10 @@ select {
   font-family: inherit;
   font-size: 0.9rem;
   padding: 0.2rem 0.3rem;
-  border-radius: 4px;
-  border: 1px solid #455a64;
-  background: #1e272e;
-  color: #f5f5f5;
+  border-radius: 6px;
+  border: 1px solid #1f3a5a;
+  background: #111e33;
+  color: #e2e8f0;
 }
 
 input[type="text"]:focus,
@@ -578,7 +607,7 @@ input[type="date"]:focus,
 input[type="search"]:focus,
 select:focus {
   outline: none;
-  border-color: #81d4fa;
+  border-color: #38bdf8;
 }
 
 
@@ -651,12 +680,12 @@ table {
 }
 
 th, td {
-  border: 1px solid #424242;
+  border: 1px solid #1e3455;
   padding: 0.3rem 0.4rem;
   font-size: 0.75rem;
   text-align: center;
 
-  background: #022c04;
+  background: #0a1628;
 }
 
 
@@ -726,11 +755,7 @@ th, td {
 .joueur-tournoi-row .label-exclu { position: static; }
 
 /* Ligne ou joueur exclu dans la feuille soirée */
-.soiree-exclu {
-  background: rgba(255,193,7,0.08);
-  color: #b26900;
-  font-style: italic;
-}
+/* .soiree-exclu removed: visual highlighting for excluded players disabled */
 
 /* Toast messages (top-right) */
 #toast-container {
@@ -787,9 +812,9 @@ th, td {
 /* Conteneurs listes */
 #liste-joueurs,
 #liste-joueurs-tournoi {
-  border-radius: 4px;
-  background: #1e1e1e;
-  color: #f5f5f5;
+  border-radius: 8px;
+  background: #0d1526;
+  color: #e2e8f0;
   padding: 0.4rem;
   min-height: 2rem;
 }
@@ -809,7 +834,7 @@ th, td {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  width: 150px;
+  width: 175px;
 }
 
 .joueur-item {
@@ -823,11 +848,11 @@ th, td {
 }
 
 .joueur-item:hover {
-  background: #424242;
+  background: #162540;
 }
 
 .joueur-item.selected {
-  background: green;
+  background: #0284c7;
 }
 
 /* Liste tournoi */
@@ -875,7 +900,7 @@ th, td {
   align-items: center;
   justify-content: center;
   font-size: 0.7rem;
-  background: #263238;
+  background: #0d1f35;
 }
 
 /* Header Tournoi & Morts */
@@ -933,16 +958,110 @@ th, td {
   margin-bottom: 0.5rem;
 }
 
+.plan-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.plan-view-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.92rem;
+  color: #cfd9eb;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: pointer;
+}
+
+.plan-mode-icon {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #89a8c9;
+  opacity: 0.85;
+  transition: color 160ms ease, opacity 160ms ease, transform 160ms ease;
+}
+
+.plan-mode-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.plan-view-switch input[type='checkbox'] {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.plan-switch-ui {
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  position: relative;
+  background: linear-gradient(180deg, #1d3554 0%, #10233e 100%);
+  border: 1px solid #31577f;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.45), 0 1px 1px rgba(255, 255, 255, 0.06);
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.plan-switch-ui::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #ffffff 0%, #d4deeb 70%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  transition: transform 180ms ease;
+}
+
+.plan-view-switch input[type='checkbox']:checked + .plan-mode-icon-cards + .plan-switch-ui {
+  background: linear-gradient(180deg, #1f8bd3 0%, #11639a 100%);
+  border-color: #7fd0ff;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(127, 208, 255, 0.25);
+}
+
+.plan-view-switch input[type='checkbox']:checked + .plan-mode-icon-cards + .plan-switch-ui::before {
+  transform: translateX(20px);
+}
+
+.plan-view-switch input[type='checkbox']:focus-visible + .plan-mode-icon-cards + .plan-switch-ui {
+  outline: 2px solid #7fd0ff;
+  outline-offset: 2px;
+}
+
+.plan-view-switch input[type='checkbox']:checked + .plan-mode-icon-cards + .plan-switch-ui + .plan-mode-icon-table {
+  color: #d9efff;
+  opacity: 1;
+  transform: scale(1.04);
+}
+
+.plan-view-switch input[type='checkbox']:not(:checked) + .plan-mode-icon-cards {
+  color: #d9efff;
+  opacity: 1;
+  transform: scale(1.04);
+}
+
 .rotations-container {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   height: calc(100vh - 220px);
   overflow-y: auto;
-  border: 1px solid #455a64; /* Optional visual boundary like the lists */
-  border-radius: 4px;
+  border: 1px solid #1f3a5a;
+  border-radius: 8px;
   padding: 0.5rem;
-  background: #1e1e1e; /* Consistent background */
+  background: #0d1526;
 }
 
 .rotation-block h3 {
@@ -954,6 +1073,188 @@ th, td {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+}
+
+.plan-table-view-wrap {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid #244466;
+  border-radius: 8px;
+  background: #0a1a30;
+}
+
+.plan-table-zones {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+  align-items: start;
+  width: 100%;
+  padding: 0.55rem;
+}
+
+.plan-table-zone {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: flex-start;
+}
+
+.plan-table-view {
+  width: max-content;
+  table-layout: fixed;
+  border-collapse: collapse;
+  min-width: 0;
+  height: auto;
+  align-self: flex-start;
+}
+
+.plan-table-view th,
+.plan-table-view td {
+  border-bottom: 1px solid rgba(125, 211, 252, 0.18);
+  padding: 0.18rem 0.42rem;
+  text-align: center;
+  font-size: 0.9rem;
+  height: 2rem;
+  line-height: 1.15;
+  vertical-align: middle;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.plan-table-view thead th {
+  position: sticky;
+  top: 0;
+  background: #0f3d5c;
+  color: #ffd700;
+  text-align: center;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  z-index: 1;
+}
+
+.plan-table-view col.col-player {
+  width: var(--plan-player-col-width, 14ch);
+}
+
+.plan-table-view col.col-manche {
+  width: 56px;
+}
+
+.plan-table-view thead th:not(.col-player),
+.plan-table-view tbody td:not(.col-player) {
+  width: 56px;
+  min-width: 56px;
+  max-width: 56px;
+}
+
+.plan-table-view .col-player {
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+  width: var(--plan-player-col-width, 14ch);
+  min-width: var(--plan-player-col-width, 14ch);
+  max-width: var(--plan-player-col-width, 14ch);
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+.plan-table-view thead th.col-player {
+  text-align: center;
+}
+
+.plan-table-view tbody th.col-player {
+  text-align: left;
+}
+
+/* Rapprocher visuellement les manches de la colonne prénom */
+.plan-table-view tbody td:first-of-type,
+.plan-table-view thead th:nth-child(2) {
+  padding-left: 0.22rem;
+}
+
+.plan-table-view tbody tr:nth-child(odd) td {
+  background: rgba(24, 57, 96, 0.96);
+}
+
+.plan-table-view tbody tr:nth-child(even) td {
+  background: rgba(8, 24, 44, 0.96);
+}
+
+.plan-table-view tbody tr:nth-child(odd) th.col-player {
+  background: rgba(18, 46, 77, 0.98);
+}
+
+.plan-table-view tbody tr:nth-child(even) th.col-player {
+  background: rgba(9, 28, 49, 0.98);
+}
+
+.plan-table-view tbody tr:hover {
+  background: transparent;
+}
+
+.plan-table-view tbody tr:hover td,
+.plan-table-view tbody tr:hover th.col-player {
+  background: rgba(63, 122, 186, 0.88);
+  color: #f4fbff;
+}
+
+@media (max-width: 1200px) {
+  .plan-table-zones {
+    grid-template-columns: 1fr;
+  }
+}
+
+.plan-cell-empty {
+  color: #7f8ea7;
+}
+
+.plan-cell-exclu {
+  color: #ff5a5f;
+  font-weight: 700;
+}
+
+.plan-cell-irregular {
+  background: rgba(250, 204, 21, 0.24) !important;
+  box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.7);
+  border-radius: 4px;
+}
+
+.plan-seat-letter {
+  font-weight: 800;
+}
+
+.plan-seat-N {
+  color: #22c55e;
+}
+
+.plan-seat-table-N {
+  color: #22c55e;
+}
+
+.plan-seat-S {
+  color: #ef4444;
+}
+
+.plan-seat-table-S {
+  color: #ef4444;
+}
+
+.plan-seat-O {
+  color: #facc15;
+}
+
+.plan-seat-table-O {
+  color: #facc15;
+}
+
+.plan-seat-E {
+  color: #3b82f6;
+}
+
+.plan-seat-table-E {
+  color: #3b82f6;
 }
 
 /* Carte Table */
@@ -985,6 +1286,12 @@ th, td {
   color: var(--table-text-color, #e5f9ed);
   box-shadow: var(--table-shadow, 0 0 15px rgba(9,37,19,0.3));
   margin-bottom: 2rem;
+}
+
+.plan-seat-irregular {
+  color: #ffd166;
+  font-weight: 700;
+  text-shadow: 0 0 8px rgba(255, 209, 102, 0.35);
 }
 
 /* highlight variant removed - tables are displayed uniformly */
@@ -1053,8 +1360,8 @@ th, td {
   width: 6ch;
   text-align: center;
   padding: 0.02rem 0.1rem; /* smaller vertical padding */
-  background: #1e272e;
-  border: 1px solid #455a64;
+  background: #111e33;
+  border: 1px solid #1f3a5a;
   color: inherit;
   border-radius: 3px;
 }
@@ -1103,10 +1410,10 @@ th, td {
 .soiree-scroll-wrapper,
 .recap-scroll-wrapper {
   height: calc(100vh - 220px);
-  overflow: auto; /* Enable both X and Y scrolling */
-  border: 1px solid #455a64;
-  border-radius: 4px;
-  background: #1e1e1e;
+  overflow: auto;
+  border: 1px solid #1f3a5a;
+  border-radius: 8px;
+  background: #0d1526;
   display: block;
 }
 
@@ -1132,9 +1439,9 @@ th, td {
   right: 12px;
   bottom: 68px;
   width: 260px;
-  background: #121212;
-  color: #ddd;
-  border: 1px solid #333;
+  background: #0d1526;
+  color: #e2e8f0;
+  border: 1px solid #1f3a5a;
   border-radius: 8px;
   padding: 10px;
   box-shadow: 0 6px 24px rgba(0,0,0,0.5);
@@ -1167,8 +1474,7 @@ th, td {
   min-width: 200px; /* Minimal width to ensure it's not too small */
   flex-shrink: 0;
   table-layout: auto; /* Standard table layout, adapts to content */
-  /* background supprimé ici pour être géré au niveau des TR/TD pour garantir l'opacité */
-  border-right: 2px solid #546e7a;
+  border-right: 2px solid #2a4a6a;
   position: sticky;
   left: 0;
   z-index: 20;
@@ -1177,11 +1483,11 @@ th, td {
 /* Force solid background on fixed table rows to prevent transparency leak */
 #table-classement-fixe tbody tr,
 #table-cognin-fixe tbody tr {
-    background-color: #1e1e1e;
+    background-color: #0d1526;
 }
 #table-classement-fixe tbody tr:nth-child(even),
 #table-cognin-fixe tbody tr:nth-child(even) {
-    background-color: #252525; /* Solid version of the semi-transparent hover */
+    background-color: #111e33;
 }
 
 /* Force solid background on these cells specifically */
@@ -1225,8 +1531,8 @@ th, td {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: #263238; /* Opaque header bg */
-  border-bottom: 2px solid #455a64; /* Back to standard border with border-collapse: separate */
+  background: #0d1f35;
+  border-bottom: 2px solid #1f3a5a;
   box-shadow: none;
   height: 60px; /* Increased height to accommodate date + trash icon */
   vertical-align: middle;
@@ -1250,9 +1556,9 @@ th, td {
 #table-classement-fixe th,
 #table-cognin-fixe th {
   z-index: 50; /* Much Higher than regular headers (10) and tables (20) */
-  background-color: #263238; /* Ensure opaque background */
+  background-color: #0d1f35;
   /* Only vertical shadow for the right side separation */
-  box-shadow: 2px 0 0 #546e7a; 
+  box-shadow: 2px 0 0 #2a4a6a; 
 }
 
 /* --- Column Widths --- */
@@ -1266,8 +1572,8 @@ th, td {
   white-space: nowrap;
   padding: 0.2rem 0.3rem; 
   height: 30px; /* Data rows height */
-  border-bottom: 1px solid #424242;
-  border-right: 1px solid #424242;
+  border-bottom: 1px solid #1e3455;
+  border-right: 1px solid #1e3455;
 }
 
 /* Specific overwrite for headers height to allow 2 lines */
@@ -1343,7 +1649,7 @@ th, td {
   border-collapse: separate;
   border-spacing: 0;
   width: auto; /* shrink to content so columns sit next to names */
-  background: #1e1e1e;
+  background: #0d1526;
   --soiree-name-col: 80px; /* default */
 }
 
@@ -1374,8 +1680,8 @@ th, td {
 #table-recap th, #table-recap td {
   text-align: center;
   padding: 0.2rem 0.3rem;
-  border-bottom: 1px solid #424242;
-  border-right: 1px solid #424242;
+  border-bottom: 1px solid #1e3455;
+  border-right: 1px solid #1e3455;
   font-size: 0.85rem;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
 }
@@ -1454,8 +1760,8 @@ th, td {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: #263238; /* same as classement headers */
-  border-bottom: 2px solid #455a64;
+  background: #0d1f35;
+  border-bottom: 2px solid #1f3a5a;
   height: 60px;
   vertical-align: middle;
 }
@@ -1777,6 +2083,23 @@ tbody.lucky-active tr.lucky-highlight { transform: translateZ(0) scale(1.08); bo
   word-break: break-word;
 }
 
+.custom-dialog-input {
+  width: 100%;
+  margin-top: 0.9rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: #e6eef6;
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
+.custom-dialog-input:focus {
+  outline: 2px solid rgba(59,130,246,0.55);
+  border-color: rgba(96,165,250,0.7);
+}
+
 .custom-dialog-buttons {
   display: flex;
   flex-wrap: wrap;
@@ -1941,9 +2264,9 @@ tr.is-mort input.manual-manche-input.input-mort-disabled::placeholder {
 }
 
 .modal-content-backup {
-  background: #1f2933;
+  background: #0d1526;
   padding: 2rem;
-  border-radius: 8px;
+  border-radius: 12px;
   width: 90%;
   max-width: 500px;
   max-height: 80vh;
@@ -1976,7 +2299,7 @@ tr.is-mort input.manual-manche-input.input-mort-disabled::placeholder {
 }
 
 #list-backups-container li:hover {
-  background-color: #3e566b;
+  background-color: #1d3050;
 }
 
 #list-backups-container li:last-child {
@@ -2037,29 +2360,6 @@ tr.is-mort input.manual-manche-input.input-mort-disabled::placeholder {
 #nb-parties,
 #nb-parties-par-manche { width: 2.2rem; text-align: center } /* kept for legacy but spacing tightened above */
 
-/* ===== DEBUG PANEL (temporary) ===== */
-#debug-panel {
-  position: fixed;
-  right: 12px;
-  bottom: 12px;
-  background: rgba(2,6,23,0.78);
-  color: #e6eef6;
-  padding: 8px 10px;
-  border-radius: 8px;
-  font-size: 12px;
-  line-height: 1.2;
-  max-width: 380px;
-  max-height: 220px;
-  overflow: auto;
-  z-index: 99999;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
-  border: 1px solid rgba(255,255,255,0.02);
-}
-#debug-panel .debug-line { margin-bottom: 6px; opacity: 0.95 }
-#debug-panel .debug-info { color: #bde0ff }
-#debug-panel .debug-warn { color: #ffd88a }
-#debug-panel .debug-err { color: #ffb3b3 }
-
 /* Validation bubble (score non-divisible) */
 .validation-bubble {
   position: fixed;
@@ -2102,8 +2402,6 @@ tr.is-mort input.manual-manche-input.input-mort-disabled::placeholder {
   0% { opacity: 1; transform: scale(1); }
   100% { opacity: 0; transform: scale(0.85) translateY(4px); }
 }
-#debug-panel::-webkit-scrollbar { height: 6px; width: 6px }
-#debug-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.04); border-radius: 6px }
 
 /* ── Minuteur ── */
 .timer-container {
@@ -2160,9 +2458,9 @@ nav button.timer-nav-flash {
   width: 80px;
   padding: 6px 8px;
   border-radius: 6px;
-  border: 1px solid #555;
-  background: #2a2a2a;
-  color: #eee;
+  border: 1px solid #1f3a5a;
+  background: #111e33;
+  color: #e2e8f0;
   font-size: 16px;
   text-align: center;
 }
@@ -2180,14 +2478,14 @@ nav button.timer-nav-flash {
 .btn-quick {
   padding: 6px 14px;
   border-radius: 6px;
-  border: 1px solid #555;
-  background: #333;
-  color: #ccc;
+  border: 1px solid #1f3a5a;
+  background: #111e33;
+  color: #cbd5e1;
   cursor: pointer;
   font-size: 13px;
   transition: background 0.2s;
 }
-.btn-quick:hover { background: #444; color: #fff; }
+.btn-quick:hover { background: #1d3050; color: #fff; }
 .timer-quick-below {
   display: flex;
   align-items: center;
@@ -2203,9 +2501,9 @@ nav button.timer-nav-flash {
   width: 90px;
   padding: 6px 8px;
   border-radius: 6px;
-  border: 1px solid #555;
-  background: #2a2a2a;
-  color: #eee;
+  border: 1px solid #1f3a5a;
+  background: #111e33;
+  color: #e2e8f0;
   font-size: 14px;
   text-align: center;
 }
@@ -2233,10 +2531,11 @@ nav button.timer-nav-flash {
   font-size: 1.5em;
 }
 .aide-section {
-  background: rgba(255,255,255,0.06);
-  border-radius: 8px;
+  background: rgba(14,165,233,0.06);
+  border-radius: 10px;
   padding: 14px 18px;
   margin-bottom: 14px;
+  border: 1px solid rgba(14,165,233,0.1);
 }
 .aide-section h3 {
   margin: 0 0 8px;
