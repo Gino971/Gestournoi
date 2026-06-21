@@ -114,6 +114,8 @@ function migrateData () {
     const redisUserPath = path.join(DATA_DIR, 'redistributions.json')
     if (!fs.existsSync(redisUserPath)) {
       const fallbackCandidates = [
+        path.join(__dirname, 'frontend', 'build', 'defaults', 'redistributions.json'),
+        path.join(__dirname, 'frontend', 'defaults', 'redistributions.json'),
         path.join(__dirname, 'defaults', 'redistributions.json'),
         path.join(__dirname, 'build', 'defaults', 'redistributions.json'),
         path.join(process.resourcesPath || '', 'defaults', 'redistributions.json'),
@@ -160,7 +162,9 @@ function migrateData () {
       } else {
         // Tentative 2: importer la liste par défaut fournie dans l'installateur
         try {
-          const defaultPath = path.join(__dirname, 'defaults', 'joueurs_club.json')
+          let defaultPath = path.join(__dirname, 'frontend', 'build', 'defaults', 'joueurs_club.json')
+          if (!fs.existsSync(defaultPath)) defaultPath = path.join(__dirname, 'frontend', 'defaults', 'joueurs_club.json')
+          if (!fs.existsSync(defaultPath)) defaultPath = path.join(__dirname, 'defaults', 'joueurs_club.json')
           if (fs.existsSync(defaultPath)) {
             const raw = fs.readFileSync(defaultPath, 'utf-8')
             const json = JSON.parse(raw)
@@ -178,7 +182,9 @@ function migrateData () {
     try {
       const existing = readJson('joueurs_club.json', [])
       if (Array.isArray(existing) && existing.length === 0) {
-        const defaultPath = path.join(__dirname, 'defaults', 'joueurs_club.json')
+        let defaultPath = path.join(__dirname, 'frontend', 'build', 'defaults', 'joueurs_club.json')
+        if (!fs.existsSync(defaultPath)) defaultPath = path.join(__dirname, 'frontend', 'defaults', 'joueurs_club.json')
+        if (!fs.existsSync(defaultPath)) defaultPath = path.join(__dirname, 'defaults', 'joueurs_club.json')
         if (fs.existsSync(defaultPath)) {
           const raw = fs.readFileSync(defaultPath, 'utf-8')
           const json = JSON.parse(raw)
