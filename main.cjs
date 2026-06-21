@@ -106,7 +106,7 @@ ipcMain.handle('delete-backup', async (event, filename) => {
 })
 
 function migrateData () {
-  const oldDataDir = path.join(__dirname, '..', 'backend', 'data')
+  const oldDataDir = path.join(__dirname, 'backend', 'data')
   if (!fs.existsSync(oldDataDir)) return
 
   // Ensure redistributions defaults are present in DATA_DIR (copy from bundled defaults if missing)

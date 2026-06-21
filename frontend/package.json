@@ -5,13 +5,13 @@
   "type": "module",
   "main": "main.cjs",
   "scripts": {
-    "start": "electron .",
-    "test": "node --test",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder",
-    "build:mac": "electron-builder --mac",
-    "build:win": "electron-builder --win",
-    "build:all": "electron-builder --mac --win"
+    "start": "npm --prefix .. run start",
+    "test": "npm --prefix .. run test",
+    "pack": "npm --prefix .. run pack",
+    "dist": "npm --prefix .. run dist",
+    "build:mac": "npm --prefix .. run build:mac",
+    "build:win": "npm --prefix .. run build:win",
+    "build:all": "npm --prefix .. run build:all"
   },
   "author": "Gino Mollo",
   "license": "ISC",
