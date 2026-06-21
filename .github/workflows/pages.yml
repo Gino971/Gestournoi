@@ -1,0 +1,61 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare static site
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _site
+          mkdir -p _site
+          cp frontend/index.html _site/
+          cp frontend/app.js _site/
+          cp frontend/api.js _site/
+          cp frontend/coreTournoi.js _site/
+          cp frontend/lucky-utils.js _site/
+          cp frontend/manifest.json _site/
+          cp frontend/rotations.js _site/
+          cp frontend/serpentin.js _site/
+          cp frontend/timer.js _site/
+          cp frontend/redistrib-helper.js _site/
+          cp frontend/redistributions.js _site/
+          cp frontend/style.css _site/
+          cp -R frontend/build _site/
+          cp -R frontend/lib _site/
+          touch _site/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
