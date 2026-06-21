@@ -9,6 +9,10 @@ export function initComposition (api) {
 
   let compositionPreviewBackup = null
 
+  function normalizePlayerName (name) {
+    return String(name || '').trim().toLowerCase()
+  }
+
   function isMortName (name) {
     return String(name || '').toUpperCase().startsWith('MORT')
   }
@@ -28,7 +32,7 @@ export function initComposition (api) {
     let exclSet = new Set()
     try {
       const exclusArr = (await api.getExclusTournoi()) || []
-      exclSet = new Set((exclusArr || []).filter(Boolean))
+      exclSet = new Set((exclusArr || []).map(normalizePlayerName).filter(Boolean))
       try { if (typeof api.renderSaisie === 'function') await api.renderSaisie() } catch (_e) {}
       try { if (typeof api.renderFeuilleSoiree === 'function') await api.renderFeuilleSoiree() } catch (_e) {}
     } catch (_e) {
@@ -38,7 +42,7 @@ export function initComposition (api) {
       const availForPlacement = avail.filter(n => {
         if (!n) return false
         if (isMortName(n)) return false
-        if (typeof exclSet !== 'undefined' && exclSet.has(n)) return false
+        if (typeof exclSet !== 'undefined' && exclSet.has(normalizePlayerName(n))) return false
         return true
       })
       compAvailableList.innerHTML = availForPlacement.map((n) => {
@@ -233,9 +237,9 @@ export function initComposition (api) {
       const arranged = Array.from(compArrangedList.querySelectorAll('.comp-item')).map(el => decodeURIComponent(el.dataset.nom || ''))
       // fetch excluded players first so they are not offered/added to the composition
       const exclusArr = await api.getExclusTournoi().catch(() => [])
-      const exclSet = new Set((exclusArr || []).filter(Boolean))
+      const exclSet = new Set((exclusArr || []).map(normalizePlayerName).filter(Boolean))
       // Remove excluded players from remaining so fullOrder contains only placeable players
-      let remaining = (api.getListeTournoi() || []).filter(n => n && !arranged.includes(n) && !exclSet.has(n))
+      let remaining = (api.getListeTournoi() || []).filter(n => n && !arranged.includes(n) && !exclSet.has(normalizePlayerName(n)))
       if (!mortsMode) remaining = remaining.filter(n => !isMortName(n))
       const arrangedFiltered = arranged.filter(n => !isMortName(n))
       const fullOrder = [...arrangedFiltered, ...remaining]
@@ -370,8 +374,8 @@ export function initComposition (api) {
     // fetch exclusions and remove them from remaining so user-placed list
     // contains only the active placeable players for the manche
     const exclusArr = await api.getExclusTournoi().catch(() => [])
-    const exclSet = new Set((exclusArr || []).filter(Boolean))
-    let remaining = (api.getListeTournoi() || []).filter(n => n && !arranged.includes(n) && !exclSet.has(n))
+    const exclSet = new Set((exclusArr || []).map(normalizePlayerName).filter(Boolean))
+    let remaining = (api.getListeTournoi() || []).filter(n => n && !arranged.includes(n) && !exclSet.has(normalizePlayerName(n)))
     if (!mortsMode) remaining = remaining.filter(n => !isMortName(n))
     const fullOrder = [...arranged, ...remaining]
     const baseOrder = (Array.isArray(api.getDernierFullTirage()) && api.getDernierFullTirage().length) ? api.getDernierFullTirage().map(p => p.nom) : (api.getListeTournoi() || [])
@@ -395,7 +399,7 @@ export function initComposition (api) {
       let ptr = 0
       for (let i = 0; i < normalizedBaseOrder.length; i++) {
         const name = normalizedBaseOrder[i]
-        if (exclSet.has(name)) finalOrder.push(name)
+        if (exclSet.has(normalizePlayerName(name))) finalOrder.push(name)
         else finalOrder.push(fullOrder[ptr++] || name)
       }
       while (ptr < fullOrder.length) finalOrder.push(fullOrder[ptr++])

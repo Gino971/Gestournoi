@@ -179,6 +179,34 @@ function loadValidatedMancheSnapshot (rotationName) {
   } catch (_e) { return null }
 }
 
+function extractMancheNumber (rotationName) {
+  const m = String(rotationName || '').match(/(\d+)/)
+  if (!m) return null
+  const n = Number(m[1])
+  return Number.isNaN(n) ? null : n
+}
+
+function hasValidatedMancheSnapshot (rotationName, mancheIndex = null) {
+  try {
+    if (loadValidatedMancheSnapshot(rotationName)) return true
+
+    const all = JSON.parse(localStorage.getItem('validated_manches_data') || '{}')
+    if (!all || typeof all !== 'object') return false
+
+    const targetNumFromName = extractMancheNumber(rotationName)
+    const targetNum = targetNumFromName || ((typeof mancheIndex === 'number' && mancheIndex >= 0) ? (mancheIndex + 1) : null)
+    if (!targetNum) return false
+
+    return Object.entries(all).some(([key, value]) => {
+      if (!value) return false
+      const num = extractMancheNumber(key)
+      return num === targetNum
+    })
+  } catch (_e) {
+    return false
+  }
+}
+
 // Supprime toutes les snapshots validées (utilisé par certaines actions de reset)
 function clearAllValidatedMancheSnapshots () {
   try { localStorage.removeItem('validated_manches_data') } catch (_e) { /* ignore */ }
@@ -1117,7 +1145,24 @@ if (nbPartiesParMancheInput) {
 }
 
 const rotationsResultDiv = document.getElementById('rotations-result')
+const planViewToggle = document.getElementById('plan-view-toggle')
 const btnQuitter = document.getElementById('btn-quitter')
+
+function isPlanTableViewEnabled () {
+  try {
+    return !!(planViewToggle && planViewToggle.checked)
+  } catch (_e) {
+    return false
+  }
+}
+
+if (planViewToggle) {
+  try { planViewToggle.checked = localStorage.getItem('tarot_plan_view_mode') === 'table' } catch (_e) {}
+  planViewToggle.addEventListener('change', () => {
+    try { localStorage.setItem('tarot_plan_view_mode', planViewToggle.checked ? 'table' : 'cards') } catch (_e) {}
+    void updateRotationsDisplay()
+  })
+}
 
 // Always present a Quit button in the header. In Electron it calls the
 // native quit handler; in a browser it attempts to close the window or
@@ -1194,7 +1239,7 @@ async function openRestoreModal () {
       // Clic sur text => Restore
       li.querySelector('.backup-info').onclick = () => performRestoreFromFile(backup.name)
 
-      // Clic sur Button => Delete
+      // Clic sur la corbeille => Supprimer
       li.querySelector('.btn-delete-backup').onclick = async (e) => {
         e.stopPropagation()
         if (await askConfirm(`Supprimer définitivement la sauvegarde "${backup.name}" ?`)) {
@@ -1981,7 +2026,18 @@ function updatePlayerListScrollMode () {
 }
 
 // Update on resize so layout mode adapts responsively
-window.addEventListener('resize', () => { try { updatePlayerListScrollMode() } catch (_e) {} })
+let rotationsResizeTimer = null
+window.addEventListener('resize', () => {
+  try { updatePlayerListScrollMode() } catch (_e) {}
+  try {
+    clearTimeout(rotationsResizeTimer)
+    rotationsResizeTimer = setTimeout(() => {
+      try {
+        if (isPlanTableViewEnabled() && dernierDictRotations) void updateRotationsDisplay()
+      } catch (_err) {}
+    }, 120)
+  } catch (_e) {}
+})
 
 
 // Mode de jeu : 'normal' (par défaut), 'morts', 'exclu', 'tables56'
@@ -2184,6 +2240,231 @@ function getTableCountForMovement ({ rotations = dernierDictRotations, tirage = 
   return inferTableCountFromPlayers(tirage.length, { modeExclu })
 }
 
+function escapeHtml (value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function getFirstNameSortKey (name) {
+  const trimmed = String(name || '').trim()
+  if (!trimmed) return ''
+  const parts = trimmed.split(/\s+/)
+  return parts[0] || trimmed
+}
+
+function getIrregularSeatsByManche (nbTables) {
+  const map = new Map()
+  if (!nbTables || nbTables <= 0) return map
+
+  // Keep in sync with movement exceptions in rotations.js (mouvementNormalFFT).
+  const movementExceptions = {
+    6: {
+      3: { E: 3 },
+      4: { O: -2 }
+    },
+    8: {
+      5: { S: 2, E: 3 },
+      6: { E: 4 }
+    },
+    9: {
+      4: { E: 3, O: -3 },
+      5: { E: 3, O: -3 }
+    },
+    10: {
+      6: { E: 3, O: -2 }
+    },
+    12: {
+      4: { O: -3 },
+      7: { E: 3 }
+    },
+    14: {
+      5: { O: -3 }
+    },
+    15: {
+      5: { O: -3 }
+    },
+    16: {
+      5: { O: -3 },
+      6: { O: -3 }
+    },
+    18: {
+      6: { O: -3 }
+    },
+    20: {
+      6: { O: -3 }
+    }
+  }
+
+  const overridesForNb = movementExceptions[Math.floor(nbTables)] || {}
+  Object.entries(overridesForNb).forEach(([manche, overrides]) => {
+    const idx = Number(manche) - 1
+    if (Number.isNaN(idx) || idx < 0) return
+    map.set(idx, new Set(Object.keys(overrides || {})))
+  })
+
+  return map
+}
+
+function buildPlanTableRowsByPlayer (rotations, rotationsKeys, exclusByManche = []) {
+  const seatLabels = ['N', 'S', 'E', 'O', 'X', 'Y']
+  const playerMap = new Map()
+
+  rotationsKeys.forEach((rotName, mancheIdx) => {
+    const tables = rotations[rotName] || []
+
+    tables.forEach((t) => {
+      const joueurs = Array.isArray(t.joueurs) ? t.joueurs : []
+      joueurs.forEach((j, seatIdx) => {
+        const nom = String((j && j.nom) || '').trim()
+        if (!nom) return
+        if (!playerMap.has(nom)) playerMap.set(nom, Array(rotationsKeys.length).fill(''))
+        const row = playerMap.get(nom)
+        const seat = seatLabels[seatIdx] || '?'
+        row[mancheIdx] = `${seat} ${t.table}`
+      })
+    })
+
+    const exclu = String(exclusByManche[mancheIdx] || '').trim()
+    if (exclu) {
+      if (!playerMap.has(exclu)) playerMap.set(exclu, Array(rotationsKeys.length).fill(''))
+      const row = playerMap.get(exclu)
+      if (!row[mancheIdx]) row[mancheIdx] = 'Exclu'
+    }
+  })
+
+  const rows = Array.from(playerMap.entries()).map(([nom, positions]) => ({ nom, positions }))
+  rows.sort((a, b) => {
+    const fa = getFirstNameSortKey(a.nom)
+    const fb = getFirstNameSortKey(b.nom)
+    const cmpFirst = fa.localeCompare(fb, 'fr', { sensitivity: 'base', numeric: true })
+    if (cmpFirst !== 0) return cmpFirst
+    return a.nom.localeCompare(b.nom, 'fr', { sensitivity: 'base', numeric: true })
+  })
+  return rows
+}
+
+function getPlanTableRowsPerZone () {
+  try {
+    const host = rotationsResultDiv && rotationsResultDiv.parentElement
+    const availableHeight = Math.max(0, Number(host && host.clientHeight) || 0)
+    const estimatedHeaderHeight = 40
+    const estimatedZonePadding = 24
+    // Keep a small safety margin to prevent an off-by-one row that creates
+    // a tiny scrollbar at the bottom of the plan table.
+    const estimatedRowHeight = 34
+    const safetyMargin = 10
+    return Math.max(1, Math.floor((availableHeight - estimatedHeaderHeight - estimatedZonePadding - safetyMargin) / estimatedRowHeight))
+  } catch (_e) {
+    return 10
+  }
+}
+
+function buildPlanTableViewHtml ({ rotations, rotationsKeys, exclusByManche, irregularSeatsByManche, rowsPerZone, modeExclu, activeMancheIndex, serpentinOn, totalNbManches }) {
+  const rows = buildPlanTableRowsByPlayer(rotations, rotationsKeys, exclusByManche)
+  const longestFirstNameLen = rows.reduce((acc, r) => {
+    const first = getFirstNameSortKey(r.nom)
+    return Math.max(acc, String(first || '').length)
+  }, 0)
+  // Keep the name column only slightly wider than the longest first name.
+  const playerColWidthCh = Math.max(8, Math.min(26, longestFirstNameLen + 2))
+  const currentMancheIndex = Math.max(0, Math.min(rotationsKeys.length - 1, Number(activeMancheIndex) || 0))
+  const visibleMancheIndices = modeExclu
+    ? rotationsKeys.reduce((acc, rotName, idx) => {
+        if (idx < currentMancheIndex && hasValidatedMancheSnapshot(rotName, idx)) acc.push(idx)
+        if (idx === currentMancheIndex) acc.push(idx)
+        return acc
+      }, [])
+    : rotationsKeys
+        .map((_, idx) => idx)
+        .filter((idx) => {
+          // In serpentin mode, show the true last manche only once the
+          // previous manche has been validated (same behavior as card view).
+          const hasSerpentinLastInView = serpentinOn && Number(totalNbManches) > 1 && rotationsKeys.length >= Number(totalNbManches)
+          if (!hasSerpentinLastInView) return true
+
+          const serpentinLastIdx = Number(totalNbManches) - 1
+          if (idx !== serpentinLastIdx) return true
+
+          const prevIdx = serpentinLastIdx - 1
+          const prevRotName = rotationsKeys && rotationsKeys[prevIdx] ? rotationsKeys[prevIdx] : null
+          return hasValidatedMancheSnapshot(prevRotName, prevIdx)
+        })
+  if (!visibleMancheIndices.length) visibleMancheIndices.push(currentMancheIndex)
+  const mancheCols = visibleMancheIndices.map(() => '<col class="col-manche">').join('')
+  const headerCols = visibleMancheIndices
+    .map((idx) => `<th scope="col">M${idx + 1}</th>`)
+    .join('')
+
+  const buildBodyRowsHtml = (rowsSlice) => rowsSlice
+    .map((r) => {
+      const cells = r.positions
+        .filter((_pos, idx) => visibleMancheIndices.includes(idx))
+        .map((pos, visibleIdx) => {
+          const value = pos || '-'
+          const normalizedValue = String(value).trim().toUpperCase()
+          const isExcluCell = normalizedValue === 'EXCLU'
+          const classes = []
+          if (!pos) classes.push('plan-cell-empty')
+          if (isExcluCell) classes.push('plan-cell-exclu')
+          if (pos && !isExcluCell) {
+            const seat = String(pos).trim().charAt(0).toUpperCase()
+            const sourceIdx = visibleMancheIndices[visibleIdx]
+            const irregularSeats = irregularSeatsByManche.get(sourceIdx)
+            if (irregularSeats && irregularSeats.has(seat)) classes.push('plan-cell-irregular')
+          }
+          let renderedValue = escapeHtml(value)
+          if (!isExcluCell) {
+            const seatMatch = String(value).trim().match(/^([NSEOXY])\s*(\d+)$/i)
+            if (seatMatch) {
+              const seatLetter = String(seatMatch[1] || '').toUpperCase()
+              const tableNumber = String(seatMatch[2] || '')
+              renderedValue = `<span class="plan-seat-letter plan-seat-${seatLetter}">${escapeHtml(seatLetter)}</span> <span class="plan-seat-table plan-seat-table-${seatLetter}">${escapeHtml(tableNumber)}</span>`
+            }
+          }
+          return `<td class="${classes.join(' ')}">${renderedValue}</td>`
+        })
+        .join('')
+      return `<tr><th scope="row" class="col-player">${escapeHtml(r.nom)}</th>${cells}</tr>`
+    })
+    .join('')
+
+  const effectiveRowsPerZone = Math.max(1, Number(rowsPerZone) || 1)
+  const zoneCount = Math.max(1, Math.ceil(rows.length / effectiveRowsPerZone))
+  const zoneRows = Array.from({ length: zoneCount }, (_, zoneIndex) => {
+    const start = zoneIndex * effectiveRowsPerZone
+    return rows.slice(start, start + effectiveRowsPerZone)
+  })
+
+  return `
+    <div class="plan-table-view-wrap" style="--plan-player-col-width:${playerColWidthCh}ch">
+      <div class="plan-table-zones">
+        ${zoneRows.map((rowsSlice, zoneIndex) => `
+        <section class="plan-table-zone" aria-label="Zone ${zoneIndex + 1} des joueurs">
+          <table class="plan-table-view" aria-label="Positions des joueurs par manche, zone ${zoneIndex + 1}">
+            <colgroup>
+              <col class="col-player" style="width:${playerColWidthCh}ch">
+              ${mancheCols}
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col" class="col-player">Joueur(euse)</th>
+                ${headerCols}
+              </tr>
+            </thead>
+            <tbody>
+              ${buildBodyRowsHtml(rowsSlice)}
+            </tbody>
+          </table>
+        </section>`).join('')}
+      </div>
+    </div>
+  `
+}
+
 function trierTournoiMortsFin () {
   listeTournoi.sort((a, b) => {
     const aMort = a.toUpperCase().includes('MORT')
@@ -2279,84 +2560,111 @@ async function updateRotationsDisplay () {
   } catch (_e) { /* ignore */ }
 
   const rotationsKeys = Object.keys(dernierDictRotations)
+  const nbTablesForCurrentPlan = getTableCountForMovement({ rotations: dernierDictRotations })
+  const irregularSeatsByManche = getIrregularSeatsByManche(nbTablesForCurrentPlan)
+  const nbJoueursTournoi = Array.isArray(listeTournoi) ? listeTournoi.length : 0
+  const isRealExcluCase = (nbJoueursTournoi % 4) === 1
+  const modeExclu =
+    (typeof getMode === 'function' && getMode() === 'exclu') &&
+    isRealExcluCase &&
+    Array.isArray(exclus) && exclus.some(e => String(e || '').trim().length > 0)
+  const serpentinOn = (typeof getSerpentinEnabled === 'function' && getSerpentinEnabled())
+  const selectedRotName = (selectRotation && typeof selectRotation.value === 'string') ? selectRotation.value : ''
+  const idxFromValue = rotationsKeys.indexOf(selectedRotName)
+  const selIdx = idxFromValue >= 0
+    ? idxFromValue
+    : ((selectRotation && typeof selectRotation.selectedIndex === 'number') ? selectRotation.selectedIndex : 0)
 
   // Prévenir le flash: cacher le conteneur avant insertion du HTML,
   // appliquer les règles, puis réafficher.
   try { if (rotationsResultDiv) rotationsResultDiv.style.visibility = 'hidden' } catch (_e) {}
 
-  const htmlForRotations = rotationsKeys
-    .map((nomRot, mancheIndex) => {
-      const tables = dernierDictRotations[nomRot] || []
-      let excluPourManche = exclus[mancheIndex] || null
+  const htmlForRotations = isPlanTableViewEnabled()
+    ? buildPlanTableViewHtml({
+        rotations: dernierDictRotations,
+        rotationsKeys,
+        exclusByManche: exclus,
+        irregularSeatsByManche,
+        modeExclu,
+        activeMancheIndex: selIdx,
+        serpentinOn,
+        totalNbManches: Number(nbPartiesInput && nbPartiesInput.value || 0),
+        rowsPerZone: getPlanTableRowsPerZone()
+      })
+    : rotationsKeys
+      .map((nomRot, mancheIndex) => {
+        const tables = dernierDictRotations[nomRot] || []
+        let excluPourManche = exclus[mancheIndex] || null
+        const irregularSeats = irregularSeatsByManche.get(mancheIndex) || new Set()
 
-      const blocTables = tables
-        .map((t, tableIdx) => {
-          const [n, s, e, o, x, y] = t.joueurs
-          let exemptHtml = ''
-          if (x) {
-            exemptHtml += `<div class="table-seat table-seat-exemption"><span>${x.nom || '?'}</span></div>`
-          }
-          if (y) {
-            exemptHtml += `<div class="table-seat table-seat-exemption-2"><span>${y.nom || '?'}</span></div>`
-          }
+        const blocTables = tables
+          .map((t, tableIdx) => {
+            const [n, s, e, o, x, y] = t.joueurs
+            let exemptHtml = ''
+            if (x) {
+              exemptHtml += `<div class="table-seat table-seat-exemption"><span>${x.nom || '?'}</span></div>`
+            }
+            if (y) {
+              exemptHtml += `<div class="table-seat table-seat-exemption-2"><span>${y.nom || '?'}</span></div>`
+            }
 
-          const nNom = (n?.nom || '').trim()
-          const sNom = (s?.nom || '').trim()
-          const eNom = (e?.nom || '').trim()
-          const oNom = (o?.nom || '').trim()
-          const excluTrim = (excluPourManche || '').trim()
-          const isMort = excluTrim && String(excluTrim).toUpperCase().includes('MORT')
-          const excluLabel = isMort ? 'Mort' : 'Exclu'
+            const nNom = (n?.nom || '').trim()
+            const sNom = (s?.nom || '').trim()
+            const eNom = (e?.nom || '').trim()
+            const oNom = (o?.nom || '').trim()
+            const excluTrim = (excluPourManche || '').trim()
+            const isMort = excluTrim && String(excluTrim).toUpperCase().includes('MORT')
+            const excluLabel = isMort ? 'Mort' : 'Exclu'
+            const northClass = irregularSeats.has('N') ? ' plan-seat-irregular' : ''
+            const southClass = irregularSeats.has('S') ? ' plan-seat-irregular' : ''
+            const eastClass = irregularSeats.has('E') ? ' plan-seat-irregular' : ''
+            const westClass = irregularSeats.has('O') ? ' plan-seat-irregular' : ''
 
-          const highlightClass = ''
+            return `
+              <div class="table-card">
+                <div class="table-card-center-label">Table ${t.table}</div>
+                <div class="table-seat table-seat-north${northClass}">
+                  <span>${nNom === excluTrim ? (isMort ? `<span class="seat-mort">${excluLabel}</span>` : `<span class="exclu-inline">${excluLabel}</span>`) : (nNom || '?')}</span>
+                </div>
+                <div class="table-seat table-seat-south${southClass}">
+                  <span>${sNom === excluTrim ? (isMort ? `<span class="seat-mort">${excluLabel}</span>` : `<span class="exclu-inline">${excluLabel}</span>`) : (sNom || '?')}</span>
+                </div>
+                <div class="table-seat table-seat-east${eastClass}">
+                  <span>${eNom === excluTrim ? (isMort ? `<span class="seat-mort">${excluLabel}</span>` : `<span class="exclu-inline">${excluLabel}</span>`) : (eNom || '?')}</span>
+                </div>
+                <div class="table-seat table-seat-west${westClass}">
+                  <span>${oNom === excluTrim ? (isMort ? `<span class="seat-mort">${excluLabel}</span>` : `<span class="exclu-inline">${excluLabel}</span>`) : (oNom || '?')}</span>
+                </div>
+                ${exemptHtml}
+              </div>
+            `
+          })
+          .join('')
 
-          return `
-            <div class="table-card${highlightClass}">
-              <div class="table-card-center-label">Table ${t.table}</div>
-              <div class="table-seat table-seat-north">
-                <span>${nNom === excluTrim ? (isMort ? `<span class="seat-mort">${excluLabel}</span>` : `<span class="exclu-inline">${excluLabel}</span>`) : (nNom || '?')}</span>
-              </div>
-              <div class="table-seat table-seat-south">
-                <span>${sNom === excluTrim ? (isMort ? `<span class="seat-mort">${excluLabel}</span>` : `<span class="exclu-inline">${excluLabel}</span>`) : (sNom || '?')}</span>
-              </div>
-              <div class="table-seat table-seat-east">
-                <span>${eNom === excluTrim ? (isMort ? `<span class="seat-mort">${excluLabel}</span>` : `<span class="exclu-inline">${excluLabel}</span>`) : (eNom || '?')}</span>
-              </div>
-              <div class="table-seat table-seat-west">
-                <span>${oNom === excluTrim ? (isMort ? `<span class="seat-mort">${excluLabel}</span>` : `<span class="exclu-inline">${excluLabel}</span>`) : (oNom || '?')}</span>
-              </div>
-              ${exemptHtml}
+        // Header inline : afficher l'exclu juste à côté du numéro de manche
+        // En serpentin, la dernière manche n'a pas d'exclu
+        const totalNbManches = Number(nbPartiesInput && nbPartiesInput.value || 0)
+        const isLastSerpentinManche = getSerpentinEnabled() && totalNbManches >= 2 && mancheIndex === totalNbManches - 1
+        const isMort = excluPourManche && String(excluPourManche).toUpperCase().includes('MORT')
+        // Header label: if it's a real Mort placeholder keep 'Mort', otherwise
+        // use a more explicit phrase for clarity next to the manche number.
+        const headerLabel = isMort ? 'Mort' : 'Exclu pour cette manche'
+        const headerHtml = (excluPourManche && !isLastSerpentinManche)
+          ? `<h3>Manche ${mancheIndex + 1} <span class="rotation-exclu-inline">${headerLabel}: <strong>${excluPourManche}</strong></span></h3>`
+          : `<h3>Manche ${mancheIndex + 1}</h3>`
+
+        // Simple template for each manche; visibility will be adjusted after
+        // l'insertion du HTML afin de garder la logique de rendu séparée.
+        return `
+          <section class="rotation-block">
+            ${headerHtml}
+            <div class="rotation-tables">
+              ${blocTables}
             </div>
-          `
-        })
-        .join('')
-
-      // Header inline : afficher l'exclu juste à côté du numéro de manche
-      // En serpentin, la dernière manche n'a pas d'exclu
-      const totalNbManches = Number(nbPartiesInput && nbPartiesInput.value || 0)
-      const isLastSerpentinManche = getSerpentinEnabled() && totalNbManches >= 2 && mancheIndex === totalNbManches - 1
-      const isMort = excluPourManche && String(excluPourManche).toUpperCase().includes('MORT')
-      // Seat label: preserve 'Mort' for Mort placeholders, otherwise 'Exclu'
-      const seatLabel = isMort ? 'Mort' : 'Exclu'
-      // Header label: if it's a real Mort placeholder keep 'Mort', otherwise
-      // use a more explicit phrase for clarity next to the manche number.
-      const headerLabel = isMort ? 'Mort' : 'Exclu pour cette manche'
-      const headerHtml = (excluPourManche && !isLastSerpentinManche)
-        ? `<h3>Manche ${mancheIndex + 1} <span class="rotation-exclu-inline">${headerLabel}: <strong>${excluPourManche}</strong></span></h3>`
-        : `<h3>Manche ${mancheIndex + 1}</h3>`
-
-      // Simple template for each manche; visibility will be adjusted after
-      // l'insertion du HTML afin de garder la logique de rendu séparée.
-      return `
-        <section class="rotation-block">
-          ${headerHtml}
-          <div class="rotation-tables">
-            ${blocTables}
-          </div>
-        </section>
-      `
-    })
-    .join('')
+          </section>
+        `
+      })
+      .join('')
 
   // Build off-DOM to avoid flashes: create a temporary container,
   // apply visibility rules there, then swap into the real container.
@@ -2383,7 +2691,11 @@ async function updateRotationsDisplay () {
         sec.classList.remove('hidden')
         if (modeExclu) {
           if (!Array.isArray(exclusArr) || exclusArr.length === 0) return
-          if (idx > selIdx) sec.classList.add('hidden')
+          const rotName = rotationsKeys && rotationsKeys[idx] ? rotationsKeys[idx] : null
+          const isCurrent = idx === selIdx
+          const isPastValidated = idx < selIdx && hasValidatedMancheSnapshot(rotName, idx)
+          const shouldShow = isCurrent || isPastValidated
+          if (!shouldShow) sec.classList.add('hidden')
         } else if (serpentinOn && totalNbManches >= 2 && idx === totalNbManches - 1) {
           // dernière manche en serpentin : n'afficher que si l'avant-dernière est validée
           const prevIdx = idx - 1
@@ -2523,6 +2835,7 @@ function clearExcluSeatIndex () {
 function buildDictRotationsWithExclus (fullTirage, exclusArr, nbParties) {
   const dict = {}
   if (!Array.isArray(fullTirage)) return dict
+  const normalizeNom = (value) => String(value || '').trim().toLowerCase()
   // Copie mutable de fullTirage qui subira les swaps successifs
   // Normaliser : accepter soit des strings (noms) soit des objets {nom, numero}
   const base = (fullTirage || []).map((p, idx) => {
@@ -2591,12 +2904,19 @@ function buildDictRotationsWithExclus (fullTirage, exclusArr, nbParties) {
 
   for (let r = 0; r < nbParties; r++) {
     const exclu = exclusArr && exclusArr[r] ? exclusArr[r] : null
+    const excluNorm = normalizeNom(exclu)
     // compute active array for this manche (may swap the excluded player to seatIndex if needed).
     // When exclu is null but seatIndex is set, remove the player at seatIndex directly (default exclu)
     // rather than returning the full base which would place the exclu at a table with wrong player count.
-    const active = exclu
+    let active = exclu
       ? computeActiveFromBase(base, seatIndex, exclu)
       : base.filter((_, i) => i !== seatIndex)
+
+    // Safety: ensure the excluded player is never present in the active list
+    // used to compose this manche (case/whitespace-insensitive).
+    if (excluNorm) {
+      active = active.filter(p => normalizeNom((p && p.nom) || '') !== excluNorm)
+    }
 
     // calculer une rotation d'une seule manche pour cet ensemble
     try {

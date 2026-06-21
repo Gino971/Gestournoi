@@ -206,6 +206,27 @@
       <div class="plan-header-actions">
         <h2 id="plan-heading">Plan de table / Manches</h2>
         <div class="actions">
+          <label class="plan-view-switch" title="Basculer entre la vue plan actuelle et une vue tableau par prénom">
+            <input type="checkbox" id="plan-view-toggle" aria-label="Basculer entre vue plan et vue tableau" />
+            <span class="plan-mode-icon plan-mode-icon-cards" aria-hidden="true" title="Vue plan de table">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="8" height="7" rx="1.5"></rect>
+                <rect x="13" y="4" width="8" height="7" rx="1.5"></rect>
+                <rect x="3" y="13" width="8" height="7" rx="1.5"></rect>
+                <rect x="13" y="13" width="8" height="7" rx="1.5"></rect>
+              </svg>
+            </span>
+            <span class="plan-switch-ui" aria-hidden="true"></span>
+            <span class="plan-mode-icon plan-mode-icon-table" aria-hidden="true" title="Vue tableau prénoms">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="6" y="8" width="12" height="8" rx="1.5"></rect>
+                <circle cx="12" cy="5.5" r="1.5"></circle>
+                <circle cx="4.5" cy="12" r="1.5"></circle>
+                <circle cx="19.5" cy="12" r="1.5"></circle>
+                <circle cx="12" cy="18.5" r="1.5"></circle>
+              </svg>
+            </span>
+          </label>
           <!-- manual composition removed from Plan (uses Plan modal via Joueurs/Tirage quick-access only) -->
         </div>
       </div>
