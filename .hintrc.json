@@ -1,6 +1,0 @@
-{
-  "connector": { "name": "local" },
-  "hints": {
-    "compat-api/html": "off"
-  }
-}
